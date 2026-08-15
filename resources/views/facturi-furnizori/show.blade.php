@@ -17,7 +17,7 @@
             <h1>{{ $factura->numar_original }}</h1>
             <p class="lead">{{ $factura->furnizor->denumire }} · {{ $factura->data_factura->format('d.m.Y') }} · {{ number_format((float) $factura->total_factura, 2, ',', '.') }} {{ $factura->moneda }}</p>
         </div>
-        <span class="pill">{{ $factura->status === 'import_partial' ? 'Import parțial' : 'Import finalizat' }}</span>
+        <span class="pill">{{ $factura->receptie ? 'Recepție finalizată' : ($factura->status === 'import_partial' ? 'Import parțial' : 'Import finalizat') }}</span>
     </div>
 
     <form method="post" action="{{ route('facturi-furnizori.mapari', $factura) }}">
@@ -68,6 +68,12 @@
                 @csrf
                 <button type="submit">Finalizează importul</button>
             </form>
+        @endif
+        @if(!$factura->receptie && $factura->status === 'import_finalizat')
+            <a class="button-secondary" href="{{ route('receptii.create', $factura) }}">Recepție</a>
+        @endif
+        @if($factura->receptie)
+            <span class="pill">Recepționată la {{ $factura->receptie->data_receptie->format('d.m.Y') }} · definitiv</span>
         @endif
         @if(!$factura->receptie)
             <form method="post" action="{{ route('facturi-furnizori.destroy', $factura) }}" onsubmit="return confirm(@js('Ștergi definitiv factura '.$factura->numar_original.'?'));">

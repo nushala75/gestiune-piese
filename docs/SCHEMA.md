@@ -26,6 +26,8 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Un produs poate fi sters din catalog cu confirmare numai daca nu are istoric in facturi, receptii, miscari de stoc sau exporturi FGO. Maparile furnizorului si soldurile locale ale produsului sunt eliminate impreuna cu el.
 - Pentru un produs existent, pretul de intrare se actualizeaza in EUR. Pretul de vanzare ramane neschimbat daca `pret_intrare * 11,5` nu il depaseste; in caz contrar previzualizarea afiseaza compact pretul propus editabil si pretul actual. Butonul `OK` actualizeaza imediat pretul cu TVA si recalculeaza pretul fara TVA.
 - Importul facturii nu modifica stocul. Pretul de vanzare se poate modifica in previzualizare numai prin confirmarea explicita `OK`; celelalte actualizari de cantitati si preturi se aplica la etapa `Receptie`, dupa confirmarea importului SAGA.
+- Receptia este permisa numai pentru o factura cu import finalizat si toate pozitiile mapate. Este integrala, necesita bifarea confirmarii ca importul in SAGA a fost facut manual si foloseste o data editabila, completata implicit cu data curenta.
+- Finalizarea receptiei este definitiva: toate liniile, miscarile de stoc, soldurile si ultimele preturi de intrare sunt salvate intr-o singura tranzactie. Unicitatea facturii in `receptii` si verificarea tranzactionala impiedica dublarea stocului.
 - Egalitatea `Amount = cantitate * pret_unitar_calculat` se verifica in serviciul de import folosind aritmetica zecimala; nu este impusa printr-un CHECK SQL sensibil la rotunjire.
 - Importul FGO ramane cu `mod_actualizare` NULL pana la verificarea sensului coloanei Cantitate.
 - Accesul SAGA nu este automatizat de schema bazei si necesita confirmare prealabila.

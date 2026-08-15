@@ -28,7 +28,7 @@ class FacturaFurnizorImportTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['exporturi_saga', 'receptii', 'facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme', 'secvente_cod_fgo'] as $table) {
+        foreach (['miscari_stoc', 'receptii_linii', 'exporturi_saga', 'receptii', 'facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme', 'secvente_cod_fgo'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -357,6 +357,91 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertSame(0, DB::table('facturi_furnizor_linii')->where('factura_id', $factura->id)->whereNull('produs_id')->count());
     }
 
+    public function test_finalized_invoice_is_received_integrally_only_after_manual_saga_confirmation(): void
+    {
+        $factura = $this->importInvoice();
+        $productId = DB::table('produse')->value('id');
+        $gestiuneId = DB::table('gestiuni')->where('cod', 'FIRMA')->value('id');
+        $initialStock = (int) DB::table('solduri_stoc')
+            ->where('gestiune_id', $gestiuneId)
+            ->where('produs_id', $productId)
+            ->value('cantitate_fizica');
+        $invoiceQuantity = (int) DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->sum('cantitate');
+
+        $this->mapAllLinesAndFinalize($factura, $productId);
+
+        $this->get("/facturi-furnizori/{$factura->id}/receptie")
+            ->assertOk()
+            ->assertSee('Recepția este integrală și definitivă')
+            ->assertSee('name="data_receptie" value="'.now()->toDateString().'"', false)
+            ->assertSee('name="confirmare_saga"', false);
+
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+        ])->assertSessionHasErrors('confirmare_saga');
+        $this->assertDatabaseCount('receptii', 0);
+        $this->assertDatabaseCount('miscari_stoc', 0);
+
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+            'confirmare_saga' => '1',
+        ])->assertRedirect("/facturi-furnizori/{$factura->id}")
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('receptii', [
+            'factura_id' => $factura->id,
+            'gestiune_id' => $gestiuneId,
+            'data_receptie' => '2026-08-15 00:00:00',
+            'status' => 'finalizata',
+        ]);
+        $this->assertDatabaseCount('receptii_linii', 47);
+        $this->assertDatabaseCount('miscari_stoc', 47);
+        $this->assertSame($invoiceQuantity, (int) DB::table('miscari_stoc')->sum('cantitate'));
+        $this->assertSame(
+            $initialStock + $invoiceQuantity,
+            (int) DB::table('solduri_stoc')
+                ->where('gestiune_id', $gestiuneId)
+                ->where('produs_id', $productId)
+                ->value('cantitate_fizica')
+        );
+        $this->assertDatabaseHas('produse_furnizori', [
+            'furnizor_id' => $factura->furnizor_id,
+            'cod_furnizor' => '11102-1G87-004',
+            'pret_achizitie_ultim' => '2.0633',
+            'moneda' => 'EUR',
+        ]);
+
+        $stockAfterReception = (int) DB::table('solduri_stoc')
+            ->where('gestiune_id', $gestiuneId)
+            ->where('produs_id', $productId)
+            ->value('cantitate_fizica');
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+            'confirmare_saga' => '1',
+        ])->assertSessionHasErrors('receptie');
+        $this->assertSame($stockAfterReception, (int) DB::table('solduri_stoc')
+            ->where('gestiune_id', $gestiuneId)
+            ->where('produs_id', $productId)
+            ->value('cantitate_fizica'));
+    }
+
+    public function test_partial_invoice_cannot_enter_reception(): void
+    {
+        $factura = $this->importInvoice();
+
+        $this->get("/facturi-furnizori/{$factura->id}/receptie")
+            ->assertRedirect("/facturi-furnizori/{$factura->id}")
+            ->assertSessionHasErrors('receptie');
+
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+            'confirmare_saga' => '1',
+        ])->assertSessionHasErrors('receptie');
+        $this->assertDatabaseCount('receptii', 0);
+    }
+
     public function test_unreceived_invoice_can_be_deleted_and_reimported(): void
     {
         $factura = $this->importInvoice();
@@ -461,6 +546,20 @@ class FacturaFurnizorImportTest extends TestCase
             ->assertRedirect('/facturi-furnizori');
 
         return FacturaFurnizor::query()->sole();
+    }
+
+    private function mapAllLinesAndFinalize(FacturaFurnizor $factura, int $productId): void
+    {
+        $lines = DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->pluck('id')
+            ->mapWithKeys(fn (int $id): array => [$id => ['product_id' => $productId]])
+            ->all();
+
+        $this->patch("/facturi-furnizori/{$factura->id}/mapari", ['lines' => $lines])
+            ->assertSessionHasNoErrors();
+        $this->post("/facturi-furnizori/{$factura->id}/finalizare")
+            ->assertSessionHasNoErrors();
     }
 
     private function invoicePath(): string
@@ -618,6 +717,31 @@ class FacturaFurnizorImportTest extends TestCase
             $table->unsignedBigInteger('gestiune_id');
             $table->dateTime('data_receptie');
             $table->string('status');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('receptii_linii', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('receptie_id');
+            $table->unsignedBigInteger('factura_linie_id');
+            $table->unsignedBigInteger('produs_id');
+            $table->bigInteger('cantitate');
+            $table->decimal('cost_unitar', 24, 12);
+            $table->decimal('valoare', 18, 2);
+            $table->unique(['receptie_id', 'factura_linie_id']);
+        });
+
+        Schema::create('miscari_stoc', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('gestiune_id');
+            $table->unsignedBigInteger('produs_id');
+            $table->string('tip', 32);
+            $table->bigInteger('cantitate');
+            $table->decimal('cost_unitar', 24, 12)->nullable();
+            $table->unsignedBigInteger('receptie_linie_id')->nullable();
+            $table->string('referinta_tip', 32)->nullable();
+            $table->unsignedBigInteger('referinta_id')->nullable();
+            $table->string('explicatie', 500);
             $table->timestamp('created_at')->nullable();
         });
 

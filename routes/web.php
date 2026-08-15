@@ -3,6 +3,7 @@
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaFurnizorImportController;
 use App\Http\Controllers\ProdusController;
+use App\Http\Controllers\ReceptieController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', DashboardController::class)->name('dashboard');
@@ -29,6 +30,8 @@ Route::get('/facturi-furnizori/{factura}/linii/{linie}/produs-nou', [FacturaFurn
     ->name('facturi-furnizori.importat.produs-nou');
 Route::post('/facturi-furnizori/{factura}/linii/{linie}/produs-nou', [FacturaFurnizorImportController::class, 'storeNewProductFromImported'])
     ->name('facturi-furnizori.importat.produs-nou.store');
+Route::get('/facturi-furnizori/{factura}/receptie', [ReceptieController::class, 'create'])->name('receptii.create');
+Route::post('/facturi-furnizori/{factura}/receptie', [ReceptieController::class, 'store'])->name('receptii.store');
 Route::get('/facturi-furnizori/{factura}', [FacturaFurnizorImportController::class, 'show'])->name('facturi-furnizori.show');
 Route::patch('/facturi-furnizori/{factura}/mapari', [FacturaFurnizorImportController::class, 'updateMappings'])->name('facturi-furnizori.mapari');
 Route::post('/facturi-furnizori/{factura}/finalizare', [FacturaFurnizorImportController::class, 'finalizeImport'])->name('facturi-furnizori.finalizare');

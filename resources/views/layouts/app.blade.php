@@ -122,7 +122,7 @@
             <a href="{{ route('dashboard') }}" @class(['active' => request()->routeIs('dashboard')])>Panou principal</a>
             <a href="{{ route('produse.index') }}" @class(['active' => request()->routeIs('produse.*')])>Produse</a>
             <a href="{{ route('facturi-furnizori.index') }}" @class(['active' => request()->routeIs('facturi-furnizori.*')])>Facturi furnizori</a>
-            <span>Recepții <b class="badge-soon">în curând</b></span>
+            <span>Recepții</span>
             <span>Stoc <b class="badge-soon">în curând</b></span>
             <span>Export SAGA <b class="badge-soon">în curând</b></span>
             <span>Export FGO <b class="badge-soon">în curând</b></span>
