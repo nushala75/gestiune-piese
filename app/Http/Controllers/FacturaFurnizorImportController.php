@@ -24,6 +24,8 @@ class FacturaFurnizorImportController extends Controller
 {
     private const SESSION_KEY = 'factura_furnizor_import_preview';
 
+    private const SALE_PRICE_MULTIPLIER = '11.5';
+
     public function index(): View
     {
         $facturi = FacturaFurnizor::query()
@@ -94,7 +96,7 @@ class FacturaFurnizorImportController extends Controller
                 : null;
             $line['current_sale_price'] = $mapping?->produs?->pret_vanzare_cu_tva;
             $line['proposed_sale_price'] = $line['unit_price'] !== ''
-                ? BigDecimal::of($line['unit_price'])->multipliedBy('2.18')->toScale(2, RoundingMode::HalfUp)->__toString()
+                ? BigDecimal::of($line['unit_price'])->multipliedBy(self::SALE_PRICE_MULTIPLIER)->toScale(2, RoundingMode::HalfUp)->__toString()
                 : null;
             $line['price_warning'] = $mapping?->produs !== null
                 && ($line['current_sale_price'] === null
@@ -224,7 +226,7 @@ class FacturaFurnizorImportController extends Controller
                     if ($line['product_id']) {
                         $product = Produs::query()->findOrFail($line['product_id']);
                         $proposedSalePrice = BigDecimal::of($unitPrice)
-                            ->multipliedBy('2.18')
+                            ->multipliedBy(self::SALE_PRICE_MULTIPLIER)
                             ->toScale(2, RoundingMode::HalfUp);
                         if ($product->pret_vanzare_cu_tva === null || $proposedSalePrice->isGreaterThan($product->pret_vanzare_cu_tva)) {
                             $priceObservation = 'Atenție la recepție: prețul de vânzare cu TVA trebuie actualizat la '.$proposedSalePrice->__toString().' RON.';

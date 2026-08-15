@@ -62,7 +62,7 @@ class FacturaFurnizorImportTest extends TestCase
             ->assertSee('47 poziții detectate')
             ->assertSee('ΤΙΠ-Ε-001967')
             ->assertSee('11102-1G87-004')
-            ->assertSee('Preț propus 9.81 RON depășește prețul actual 0.00 RON')
+            ->assertSee('Preț propus 51.75 RON depășește prețul actual 0.00 RON')
             ->assertSee('Taxare inversă: DA');
 
         $draft = session('factura_furnizor_import_preview');
@@ -102,7 +102,7 @@ class FacturaFurnizorImportTest extends TestCase
         ]);
         $this->assertDatabaseHas('facturi_furnizor_linii', [
             'cod_furnizor' => '11192-LBA7-900',
-            'observatii' => 'Atenție la recepție: prețul de vânzare cu TVA trebuie actualizat la 9.81 RON.',
+            'observatii' => 'Atenție la recepție: prețul de vânzare cu TVA trebuie actualizat la 51.75 RON.',
         ]);
     }
 
