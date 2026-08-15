@@ -5,14 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaFurnizorImportController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\ReceptieController;
-use App\Http\Controllers\TemporaryStockImportController;
 use Illuminate\Support\Facades\Route;
-
-Route::get('/actualizare-stoc-temporara', [TemporaryStockImportController::class, 'show'])->name('stoc-import-temporar.show');
-Route::post('/actualizare-stoc-temporara/verificare', [TemporaryStockImportController::class, 'preview'])
-    ->name('stoc-import-temporar.preview');
-Route::post('/actualizare-stoc-temporara/aplicare', [TemporaryStockImportController::class, 'apply'])
-    ->name('stoc-import-temporar.apply');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
