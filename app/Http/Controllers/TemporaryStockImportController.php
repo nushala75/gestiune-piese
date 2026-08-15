@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
 
@@ -18,7 +17,9 @@ class TemporaryStockImportController extends Controller
 {
     private const SESSION_KEY = 'temporary_stock_import_preview';
 
-    private const LOCK_PATH = 'importuri/actualizare-stoc-unica.finalizat';
+    private const LOCK_TYPE = 'actualizare_stoc_unica';
+
+    private const LOCK_HASH = '286124d8a7d4306e4ccf5499478816246df634e422285b9b24e30161da4b6410';
 
     /** @var array<string, int> */
     private const FORCED_STOCKS = [
@@ -92,6 +93,10 @@ class TemporaryStockImportController extends Controller
 
         try {
             $result = DB::transaction(function () use ($stocks, $necesarAprovizionare): array {
+                if ($this->isCompleted()) {
+                    throw new RuntimeException('Importul unic de stoc a fost deja finalizat și este blocat.');
+                }
+
                 $gestiune = Gestiune::query()
                     ->where('cod', 'FIRMA')
                     ->whereHas('firma', fn (Builder $query) => $query->where('cod_fiscal', 'RO20548513'))
@@ -135,25 +140,28 @@ class TemporaryStockImportController extends Controller
                     }
                 });
 
-                return [
+                $result = [
                     'products_total' => $products->count(),
                     'products_positive' => $updatedPositive,
                     'products_zero' => $products->count() - $updatedPositive,
                 ];
+
+                DB::table('importuri_fisiere')->insert([
+                    'tip' => self::LOCK_TYPE,
+                    'nume_fisier' => 'stoc-r.csv',
+                    'hash_sha256' => self::LOCK_HASH,
+                    'cale_stocare' => 'import-unic-fara-stocare',
+                    'status' => 'finalizat',
+                    'rezultat' => json_encode($result, JSON_UNESCAPED_UNICODE),
+                ]);
+
+                return $result;
             });
         } catch (Throwable $exception) {
             report($exception);
 
             return back()->withErrors(['stoc_csv' => 'Stocurile nu au fost modificate: '.$exception->getMessage()]);
         }
-
-        Storage::disk('local')->put(
-            self::LOCK_PATH,
-            json_encode([
-                'completed_at' => now()->toIso8601String(),
-                'result' => $result,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE),
-        );
 
         $request->session()->forget(self::SESSION_KEY);
 
@@ -276,6 +284,10 @@ class TemporaryStockImportController extends Controller
 
     private function isCompleted(): bool
     {
-        return Storage::disk('local')->exists(self::LOCK_PATH);
+        return DB::table('importuri_fisiere')
+            ->where('tip', self::LOCK_TYPE)
+            ->where('hash_sha256', self::LOCK_HASH)
+            ->where('status', 'finalizat')
+            ->exists();
     }
 }
