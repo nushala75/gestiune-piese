@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaFurnizorImportController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\ReceptieController;
+use App\Http\Controllers\SagaExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -45,6 +46,7 @@ Route::middleware('auth')->group(function (): void {
         ->name('facturi-furnizori.importat.produs-nou.store');
     Route::get('/facturi-furnizori/{factura}/receptie', [ReceptieController::class, 'create'])->name('receptii.create');
     Route::post('/facturi-furnizori/{factura}/receptie', [ReceptieController::class, 'store'])->name('receptii.store');
+    Route::post('/facturi-furnizori/{factura}/export-saga', [SagaExportController::class, 'generate'])->name('facturi-furnizori.export-saga');
     Route::get('/facturi-furnizori/{factura}', [FacturaFurnizorImportController::class, 'show'])->name('facturi-furnizori.show');
     Route::patch('/facturi-furnizori/{factura}/mapari', [FacturaFurnizorImportController::class, 'updateMappings'])->name('facturi-furnizori.mapari');
     Route::post('/facturi-furnizori/{factura}/finalizare', [FacturaFurnizorImportController::class, 'finalizeImport'])->name('facturi-furnizori.finalizare');
