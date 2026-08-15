@@ -80,6 +80,12 @@
         @if(!$factura->receptie && $factura->status === 'import_finalizat')
             <a @class(['button-secondary', 'button-danger' => $factura->tip_document === 'storno']) href="{{ route('receptii.create', $factura) }}">{{ $factura->tip_document === 'storno' ? 'Recepție storno' : 'Recepție' }}</a>
         @endif
+        @if($factura->status !== 'import_partial')
+            <form method="post" action="{{ route('facturi-furnizori.export-saga', $factura) }}">
+                @csrf
+                <button type="submit">Generează XML SAGA</button>
+            </form>
+        @endif
         @if($factura->receptie)
             <span class="pill">Recepționată la {{ $factura->receptie->data_receptie->format('d.m.Y') }} · definitiv</span>
         @endif
