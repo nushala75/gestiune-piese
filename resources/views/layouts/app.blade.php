@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>@yield('title', 'Gestiune Piese Kymco')</title>
+    <style>
+        :root { color-scheme: light; --navy:#17324d; --blue:#245b85; --sky:#eaf2f8; --line:#d9e2ea; --ink:#17212b; --muted:#667788; --green:#167a5b; --amber:#b46b12; }
+        * { box-sizing: border-box; }
+        body { margin:0; background:#f4f7fa; color:var(--ink); font:15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        a { color:inherit; }
+        .shell { min-height:100vh; display:grid; grid-template-columns:250px 1fr; }
+        .sidebar { background:var(--navy); color:#fff; padding:24px 18px; }
+        .brand { display:flex; gap:12px; align-items:center; margin-bottom:30px; }
+        .brand-mark { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; background:#fff; color:var(--navy); font-weight:800; }
+        .brand strong { display:block; font-size:16px; }
+        .brand small { color:#b8c8d8; }
+        .menu { display:grid; gap:6px; }
+        .menu a, .menu span { display:flex; align-items:center; justify-content:space-between; padding:11px 12px; border-radius:9px; text-decoration:none; }
+        .menu a:hover, .menu a.active { background:rgba(255,255,255,.13); }
+        .menu span { color:#91a6ba; }
+        .badge-soon { font-size:10px; padding:2px 6px; border:1px solid #718ba3; border-radius:999px; }
+        main { min-width:0; }
+        .topbar { height:72px; display:flex; justify-content:space-between; align-items:center; padding:0 32px; background:#fff; border-bottom:1px solid var(--line); }
+        .topbar strong { font-size:18px; }
+        .company { color:var(--muted); font-size:13px; }
+        .content { padding:30px 32px 48px; }
+        .page-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:24px; }
+        h1 { margin:0 0 4px; font-size:28px; letter-spacing:-.02em; }
+        .lead { margin:0; color:var(--muted); }
+        .cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+        .card, .panel { background:#fff; border:1px solid var(--line); border-radius:14px; box-shadow:0 8px 24px rgba(23,50,77,.05); }
+        .card { padding:22px; }
+        .card span { color:var(--muted); }
+        .card strong { display:block; margin-top:6px; font-size:30px; }
+        .panel { overflow:hidden; }
+        .panel-head { padding:18px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+        .panel-head h2 { margin:0; font-size:17px; }
+        .quick { margin-top:20px; padding:20px; }
+        .quick-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px; }
+        .quick a, .quick span { padding:16px; border:1px solid var(--line); border-radius:10px; text-decoration:none; background:#fbfdff; }
+        .quick span { color:var(--muted); }
+        .search { display:flex; gap:8px; }
+        input[type=search] { min-width:300px; border:1px solid #bdcbd7; border-radius:9px; padding:10px 12px; font:inherit; }
+        button { border:0; border-radius:9px; padding:10px 16px; background:var(--blue); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+        .table-wrap { overflow:auto; }
+        table { width:100%; border-collapse:collapse; white-space:nowrap; }
+        th { padding:11px 14px; text-align:left; background:#edf3f8; color:#41566a; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+        td { padding:12px 14px; border-top:1px solid #e7edf2; vertical-align:top; }
+        td.name { white-space:normal; min-width:260px; }
+        code { padding:3px 6px; border-radius:5px; background:#eef3f7; color:#294b69; }
+        .pill { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:var(--sky); color:var(--blue); }
+        .stock-positive { color:var(--green); font-weight:800; }
+        .stock-zero { color:var(--amber); font-weight:800; }
+        .money { text-align:right; font-variant-numeric:tabular-nums; }
+        .empty { padding:40px; text-align:center; color:var(--muted); }
+        .notice { margin-bottom:20px; padding:14px 16px; border-radius:10px; background:#fff6df; color:#765018; border:1px solid #f2d598; }
+        nav.pagination { padding:16px 20px; border-top:1px solid var(--line); }
+        nav.pagination svg { width:18px; }
+        @media (max-width:900px) { .shell{grid-template-columns:1fr}.sidebar{padding:16px}.menu{grid-template-columns:repeat(2,1fr)}.topbar{padding:0 18px}.content{padding:22px 18px}.cards{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.page-head{align-items:stretch;flex-direction:column}.search{width:100%}input[type=search]{min-width:0;flex:1}.company{display:none} }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark">K</div>
+            <div><strong>Gestiune Kymco</strong><small>Piese și stoc</small></div>
+        </div>
+        <nav class="menu" aria-label="Meniu principal">
+            <a href="{{ route('dashboard') }}" @class(['active' => request()->routeIs('dashboard')])>Panou principal</a>
+            <a href="{{ route('produse.index') }}" @class(['active' => request()->routeIs('produse.*')])>Produse</a>
+            <span>Facturi furnizori <b class="badge-soon">în curând</b></span>
+            <span>Recepții <b class="badge-soon">în curând</b></span>
+            <span>Stoc <b class="badge-soon">în curând</b></span>
+            <span>Export SAGA <b class="badge-soon">în curând</b></span>
+            <span>Export FGO <b class="badge-soon">în curând</b></span>
+            <span>Jurnal audit <b class="badge-soon">în curând</b></span>
+        </nav>
+    </aside>
+    <main>
+        <header class="topbar">
+            <strong>@yield('section', 'Panou principal')</strong>
+            <div class="company">DESIGN MEDIA BUSINESS SRL · RO20548513 · Gestiune FIRMA</div>
+        </header>
+        <div class="content">@yield('content')</div>
+    </main>
+</div>
+</body>
+</html>
