@@ -219,4 +219,24 @@ class ProduseTestSeederTest extends TestCase
             'cantitate_fizica' => 19,
         ]);
     }
+
+    public function test_product_without_transaction_history_can_be_deleted_with_its_local_links(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $product = DB::table('produse')->where('cod_produs', '11102-1G87-004')->first();
+
+        $this->get('/produse')
+            ->assertOk()
+            ->assertSee('Șterge')
+            ->assertSee("action=\"http://localhost/produse/{$product->id}\"", false)
+            ->assertSee("Ștergi definitiv produsul {$product->cod_produs}");
+
+        $this->delete("/produse/{$product->id}")
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('produse', ['id' => $product->id]);
+        $this->assertDatabaseMissing('produse_furnizori', ['produs_id' => $product->id]);
+        $this->assertDatabaseMissing('solduri_stoc', ['produs_id' => $product->id]);
+    }
 }

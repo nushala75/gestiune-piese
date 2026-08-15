@@ -33,7 +33,7 @@ class FacturaFurnizorImportController extends Controller
     public function index(): View
     {
         $facturi = FacturaFurnizor::query()
-            ->with(['furnizor', 'linii'])
+            ->with(['furnizor', 'linii', 'receptie'])
             ->latest('id')
             ->paginate(20);
 
@@ -319,6 +319,230 @@ class FacturaFurnizorImportController extends Controller
             ->with('status', "Prețul produsului {$product->cod_produs} a fost actualizat.");
     }
 
+    public function show(FacturaFurnizor $factura): View
+    {
+        $factura->load(['furnizor', 'linii.produs', 'receptie']);
+
+        return view('facturi-furnizori.show', [
+            'factura' => $factura,
+            'produse' => Produs::query()->orderBy('cod_produs')->get(['id', 'cod_produs', 'denumire_engleza']),
+        ]);
+    }
+
+    public function newProductFromImported(FacturaFurnizor $factura, FacturaFurnizorLinie $linie): View|RedirectResponse
+    {
+        if ($linie->factura_id !== $factura->id || $linie->produs_id !== null || $factura->status !== 'import_partial') {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Poziția nu este disponibilă pentru crearea unui produs nou.']);
+        }
+        if ($factura->receptie()->exists()) {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Produsele nu mai pot fi create după începerea recepției.']);
+        }
+
+        $categorii = Categorie::query()->where('activa', true)->orderBy('denumire')->get();
+        $unitatiMasura = UnitateMasura::query()->where('activa', true)->orderBy('cod')->get();
+        $categorieImplicita = $categorii->firstWhere('denumire', 'Pe comanda');
+        $unitateImplicita = $unitatiMasura->firstWhere('cod', 'BUC');
+        if ($categorieImplicita === null || $unitateImplicita === null) {
+            return redirect()->route('facturi-furnizori.show', $factura)->withErrors([
+                'factura' => 'Produsul nou nu poate fi creat: lipsesc categoria activă „Pe comanda” sau unitatea activă „BUC”.',
+            ]);
+        }
+
+        return view('facturi-furnizori.produs-nou-importat', [
+            'factura' => $factura,
+            'linie' => $linie,
+            'pretPropus' => BigDecimal::of($linie->pret_unitar_calculat)
+                ->multipliedBy(self::SALE_PRICE_MULTIPLIER)
+                ->toScale(2, RoundingMode::HalfUp)
+                ->__toString(),
+            'categorii' => $categorii,
+            'unitatiMasura' => $unitatiMasura,
+            'categorieImplicita' => $categorieImplicita,
+            'unitateImplicita' => $unitateImplicita,
+        ]);
+    }
+
+    public function storeNewProductFromImported(
+        Request $request,
+        FacturaFurnizor $factura,
+        FacturaFurnizorLinie $linie,
+        CodFgoAllocator $allocator,
+    ): RedirectResponse {
+        if ($linie->factura_id !== $factura->id
+            || $linie->produs_id !== null
+            || $factura->status !== 'import_partial'
+            || $factura->receptie()->exists()) {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Poziția nu mai este disponibilă pentru crearea produsului.']);
+        }
+
+        $data = $request->validate([
+            'cod_produs' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i', Rule::unique('produse', 'cod_produs')],
+            'denumire_engleza' => ['required', 'string', 'max:255'],
+            'descriere_romana' => ['nullable', 'string'],
+            'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
+            'unitate_masura_id' => ['required', Rule::exists('unitati_masura', 'id')->where('activa', true)],
+            'marca' => ['nullable', 'string', 'max:100'],
+            'stoc_minim' => ['required', 'integer', 'min:0'],
+            'pret_intrare' => ['required', 'decimal:0,4', 'min:0'],
+            'pret_vanzare_cu_tva' => ['required', 'decimal:0,2', 'min:0'],
+            'greutate_kg' => ['nullable', 'decimal:0,3', 'min:0'],
+            'voluminos' => ['required', 'boolean'],
+            'lungime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'latime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'activ' => ['required', 'boolean'],
+        ]);
+
+        $pretFaraTva = BigDecimal::of($data['pret_vanzare_cu_tva'])
+            ->dividedBy('1.21', 4, RoundingMode::HalfUp)
+            ->__toString();
+
+        try {
+            $product = DB::transaction(function () use ($allocator, $data, $factura, $linie, $pretFaraTva): Produs {
+                $product = Produs::query()->create([
+                    'cod_fgo' => $allocator->aloca(),
+                    'cod_produs' => mb_strtoupper(trim($data['cod_produs'])),
+                    'denumire_engleza' => mb_strtoupper(trim($data['denumire_engleza'])),
+                    'descriere_romana' => filled($data['descriere_romana'] ?? null) ? trim($data['descriere_romana']) : null,
+                    'categorie_id' => $data['categorie_id'],
+                    'unitate_masura_id' => $data['unitate_masura_id'],
+                    'marca' => filled($data['marca'] ?? null) ? mb_strtoupper(trim($data['marca'])) : null,
+                    'stoc_minim' => $data['stoc_minim'],
+                    'pret_vanzare_fara_tva' => $pretFaraTva,
+                    'pret_vanzare_cu_tva' => $data['pret_vanzare_cu_tva'],
+                    'cota_tva' => '21.00',
+                    'greutate_kg' => $data['greutate_kg'] ?? null,
+                    'voluminos' => $data['voluminos'],
+                    'lungime_cm' => $data['lungime_cm'] ?? null,
+                    'latime_cm' => $data['latime_cm'] ?? null,
+                    'inaltime_cm' => $data['inaltime_cm'] ?? null,
+                    'activ' => $data['activ'],
+                    'sursa' => 'factura_moto_trend',
+                ]);
+
+                ProdusFurnizor::query()->updateOrCreate(
+                    ['furnizor_id' => $factura->furnizor_id, 'cod_furnizor' => $linie->cod_furnizor],
+                    [
+                        'produs_id' => $product->id,
+                        'denumire_furnizor' => $linie->descriere_originala,
+                        'pret_achizitie_ultim' => $data['pret_intrare'],
+                        'moneda' => $factura->moneda,
+                        'data_ultimei_achizitii' => $factura->data_factura,
+                        'confirmata_manual' => true,
+                    ],
+                );
+
+                $linie->update(['produs_id' => $product->id, 'status_mapare' => 'mapat', 'observatii' => null]);
+                $factura->update(['status' => 'import_partial']);
+
+                return $product;
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors(['produs' => 'Produsul nu a putut fi salvat: '.$exception->getMessage()]);
+        }
+
+        return redirect()->route('facturi-furnizori.show', $factura)
+            ->with('status', "Produsul {$product->cod_produs} a fost creat și mapat.");
+    }
+
+    public function updateMappings(Request $request, FacturaFurnizor $factura): RedirectResponse
+    {
+        if ($factura->status !== 'import_partial') {
+            return back()->withErrors(['factura' => 'Importul este deja finalizat. Pentru refacere, șterge factura și reimportă PDF-ul.']);
+        }
+        if ($factura->receptie()->exists()) {
+            return back()->withErrors(['factura' => 'Mapările nu mai pot fi modificate după crearea recepției.']);
+        }
+
+        $data = $request->validate([
+            'lines' => ['required', 'array'],
+            'lines.*.product_id' => ['nullable', 'integer', Rule::exists('produse', 'id')],
+        ]);
+
+        $factura->load('linii');
+        DB::transaction(function () use ($data, $factura): void {
+            foreach ($factura->linii as $line) {
+                $productId = $data['lines'][$line->id]['product_id'] ?? null;
+                $line->update([
+                    'produs_id' => $productId,
+                    'status_mapare' => $productId ? 'mapat' : 'necesita_mapare',
+                    'observatii' => $productId ? $line->observatii : 'Produsul necesită mapare manuală.',
+                ]);
+
+                if ($productId) {
+                    ProdusFurnizor::query()->updateOrCreate(
+                        [
+                            'furnizor_id' => $factura->furnizor_id,
+                            'cod_furnizor' => $line->cod_furnizor,
+                        ],
+                        [
+                            'produs_id' => $productId,
+                            'denumire_furnizor' => $line->descriere_originala,
+                            'moneda' => $factura->moneda,
+                            'confirmata_manual' => true,
+                        ],
+                    );
+                }
+            }
+
+            $factura->update(['status' => 'import_partial']);
+        });
+
+        return back()->with('status', 'Mapările au fost salvate. Folosește „Finalizează importul” după completarea tuturor pozițiilor.');
+    }
+
+    public function finalizeImport(FacturaFurnizor $factura): RedirectResponse
+    {
+        if ($factura->receptie()->exists()) {
+            return back()->withErrors(['factura' => 'Importul nu mai poate fi modificat după crearea recepției.']);
+        }
+        if ($factura->linii()->whereNull('produs_id')->exists()) {
+            return back()->withErrors(['factura' => 'Importul nu poate fi finalizat: există poziții fără produs mapat.']);
+        }
+
+        $factura->update(['status' => 'import_finalizat']);
+
+        return back()->with('status', "Importul facturii {$factura->numar_original} a fost finalizat.");
+    }
+
+    public function destroy(FacturaFurnizor $factura): RedirectResponse
+    {
+        if ($factura->receptie()->exists()) {
+            return back()->withErrors(['factura' => 'Factura nu poate fi ștearsă deoarece are recepție.']);
+        }
+
+        $factura->load(['importFisier', 'exporturiSaga']);
+        $filePaths = $factura->exporturiSaga
+            ->pluck('cale_stocare')
+            ->filter()
+            ->push($factura->importFisier?->cale_stocare)
+            ->filter()
+            ->values()
+            ->all();
+        $invoiceNumber = $factura->numar_original;
+        $import = $factura->importFisier;
+
+        DB::transaction(function () use ($factura, $import): void {
+            $factura->exporturiSaga()->delete();
+            $factura->linii()->delete();
+            $factura->delete();
+
+            if ($import !== null && ! $import->facturi()->exists()) {
+                $import->delete();
+            }
+        });
+
+        Storage::disk('local')->delete($filePaths);
+
+        return redirect()->route('facturi-furnizori.index')
+            ->with('status', "Factura {$invoiceNumber} a fost ștearsă definitiv și poate fi reimportată.");
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY);
@@ -404,7 +628,7 @@ class FacturaFurnizorImportController extends Controller
                     'total_tva' => '0.00',
                     'total_factura' => $invoice['total_amount'],
                     'taxare_inversa' => true,
-                    'status' => $hasUnmapped ? 'necesita_mapare' : 'importata',
+                    'status' => $hasUnmapped ? 'import_partial' : 'import_finalizat',
                 ]);
 
                 foreach (array_values($validated['lines']) as $index => $line) {

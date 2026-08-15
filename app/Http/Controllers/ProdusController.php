@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 
 class ProdusController extends Controller
@@ -171,5 +172,32 @@ class ProdusController extends Controller
         return redirect()
             ->route('produse.edit-detalii', $produs)
             ->with('status', "Detaliile produsului {$produs->cod_produs} au fost actualizate.");
+    }
+
+    public function destroy(Produs $produs): RedirectResponse
+    {
+        $transactionalTables = [
+            'facturi_furnizor_linii',
+            'receptii_linii',
+            'miscari_stoc',
+            'exporturi_fgo_stoc_linii',
+        ];
+
+        foreach ($transactionalTables as $table) {
+            if (Schema::hasTable($table) && DB::table($table)->where('produs_id', $produs->id)->exists()) {
+                return back()->withErrors([
+                    'produs' => "Produsul {$produs->cod_produs} nu poate fi șters deoarece are istoric tranzacțional.",
+                ]);
+            }
+        }
+
+        $code = $produs->cod_produs;
+        DB::transaction(function () use ($produs): void {
+            $produs->solduriStoc()->delete();
+            $produs->furnizori()->delete();
+            $produs->delete();
+        });
+
+        return back()->with('status', "Produsul {$code} a fost șters definitiv.");
     }
 }

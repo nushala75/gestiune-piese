@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\FacturaFurnizor;
 use App\Services\MotoTrendInvoiceParser;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Database\Seeders\ProduseTestSeeder;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -25,7 +28,7 @@ class FacturaFurnizorImportTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme', 'secvente_cod_fgo'] as $table) {
+        foreach (['exporturi_saga', 'receptii', 'facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme', 'secvente_cod_fgo'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -90,7 +93,7 @@ class FacturaFurnizorImportTest extends TestCase
             'total_factura' => 1360.72,
             'total_tva' => 0,
             'taxare_inversa' => 1,
-            'status' => 'necesita_mapare',
+            'status' => 'import_partial',
         ]);
         $this->assertDatabaseHas('facturi_furnizor_linii', [
             'numar_linie' => 1,
@@ -219,6 +222,141 @@ class FacturaFurnizorImportTest extends TestCase
             'moneda' => 'EUR',
         ]);
         $this->assertSame($productId, session('factura_furnizor_import_preview')['invoice']['lines'][$lineIndex]['product_id']);
+    }
+
+    public function test_partial_import_can_be_completed_and_finalized(): void
+    {
+        $factura = $this->importInvoice();
+
+        $this->get("/facturi-furnizori/{$factura->id}")
+            ->assertOk()
+            ->assertSee('Import parțial')
+            ->assertSee('Produs NOU')
+            ->assertSee('Finalizează importul');
+
+        $this->post("/facturi-furnizori/{$factura->id}/finalizare")
+            ->assertSessionHasErrors('factura');
+
+        $productId = DB::table('produse')->value('id');
+        $lines = DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->pluck('id')
+            ->mapWithKeys(fn (int $id): array => [$id => ['product_id' => $productId]])
+            ->all();
+
+        $this->patch("/facturi-furnizori/{$factura->id}/mapari", ['lines' => $lines])
+            ->assertSessionHasNoErrors();
+        $this->post("/facturi-furnizori/{$factura->id}/finalizare")
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('facturi_furnizor', ['id' => $factura->id, 'status' => 'import_finalizat']);
+        $this->assertSame(0, DB::table('facturi_furnizor_linii')->where('factura_id', $factura->id)->whereNull('produs_id')->count());
+    }
+
+    public function test_unreceived_invoice_can_be_deleted_and_reimported(): void
+    {
+        $factura = $this->importInvoice();
+        $import = DB::table('importuri_fisiere')->first();
+        $this->assertTrue(Storage::disk('local')->exists($import->cale_stocare));
+
+        $this->delete("/facturi-furnizori/{$factura->id}")
+            ->assertRedirect('/facturi-furnizori')
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('facturi_furnizor', 0);
+        $this->assertDatabaseCount('facturi_furnizor_linii', 0);
+        $this->assertDatabaseCount('importuri_fisiere', 0);
+        $this->assertFalse(Storage::disk('local')->exists($import->cale_stocare));
+        $this->assertDatabaseCount('produse', 7);
+
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('reimport.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+    }
+
+    public function test_new_product_can_be_created_while_continuing_a_partial_import(): void
+    {
+        $factura = $this->importInvoice();
+        $line = DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->whereNull('produs_id')
+            ->first();
+
+        $this->get("/facturi-furnizori/{$factura->id}/linii/{$line->id}/produs-nou")
+            ->assertOk()
+            ->assertSee($line->cod_furnizor)
+            ->assertSee('preț intrare × 11,5');
+
+        $categoryId = DB::table('categorii')->where('denumire', 'Pe comanda')->value('id');
+        $unitId = DB::table('unitati_masura')->where('cod', 'BUC')->value('id');
+        $salePrice = BigDecimal::of($line->pret_unitar_calculat)
+            ->multipliedBy('11.5')
+            ->toScale(2, RoundingMode::HalfUp)
+            ->__toString();
+
+        $this->post("/facturi-furnizori/{$factura->id}/linii/{$line->id}/produs-nou", [
+            'cod_produs' => $line->cod_furnizor,
+            'denumire_engleza' => $line->descriere_originala,
+            'descriere_romana' => null,
+            'categorie_id' => $categoryId,
+            'unitate_masura_id' => $unitId,
+            'marca' => 'KYMCO',
+            'stoc_minim' => 1,
+            'pret_intrare' => number_format((float) $line->pret_unitar_calculat, 4, '.', ''),
+            'pret_vanzare_cu_tva' => $salePrice,
+            'greutate_kg' => null,
+            'voluminos' => 0,
+            'lungime_cm' => null,
+            'latime_cm' => null,
+            'inaltime_cm' => null,
+            'activ' => 1,
+        ])->assertRedirect("/facturi-furnizori/{$factura->id}");
+
+        $productId = DB::table('produse')->where('cod_produs', $line->cod_furnizor)->value('id');
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'cod_fgo' => '01000000',
+            'activ' => 1,
+        ]);
+        $this->assertDatabaseHas('facturi_furnizor_linii', [
+            'id' => $line->id,
+            'produs_id' => $productId,
+            'status_mapare' => 'mapat',
+        ]);
+    }
+
+    public function test_product_used_by_invoice_cannot_be_deleted(): void
+    {
+        $factura = $this->importInvoice();
+        $productId = DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->whereNotNull('produs_id')
+            ->value('produs_id');
+
+        $this->delete("/produse/{$productId}")->assertSessionHasErrors('produs');
+        $this->assertDatabaseHas('produse', ['id' => $productId]);
+    }
+
+    private function importInvoice(): FacturaFurnizor
+    {
+        Storage::fake('local');
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $lines = collect($draft['invoice']['lines'])->map(fn (array $line): array => [
+            'supplier_code' => $line['supplier_code'],
+            'description' => $line['description'],
+            'quantity' => $line['quantity'],
+            'amount' => $line['amount'],
+            'product_id' => $line['product_id'],
+        ])->all();
+
+        $this->post('/facturi-furnizori/import', ['token' => $draft['token'], 'lines' => $lines])
+            ->assertRedirect('/facturi-furnizori');
+
+        return FacturaFurnizor::query()->sole();
     }
 
     private function invoicePath(): string
@@ -368,6 +506,28 @@ class FacturaFurnizorImportTest extends TestCase
             $table->string('status_mapare', 32);
             $table->text('observatii')->nullable();
             $table->unique(['factura_id', 'numar_linie']);
+        });
+
+        Schema::create('receptii', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('factura_id')->unique();
+            $table->unsignedBigInteger('gestiune_id');
+            $table->dateTime('data_receptie');
+            $table->string('status');
+            $table->timestamp('created_at')->nullable();
+        });
+
+        Schema::create('exporturi_saga', function (Blueprint $table): void {
+            $table->id();
+            $table->string('tip');
+            $table->unsignedBigInteger('factura_id')->nullable();
+            $table->string('nume_fisier');
+            $table->string('hash_sha256', 64)->unique();
+            $table->string('cale_stocare');
+            $table->string('status');
+            $table->dateTime('confirmat_la')->nullable();
+            $table->text('mesaj_rezultat')->nullable();
+            $table->timestamp('created_at')->nullable();
         });
     }
 }

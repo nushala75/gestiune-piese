@@ -49,12 +49,17 @@
                             $soldFirma = $produs->solduriStoc->first(fn ($sold) => $sold->gestiune?->cod === 'FIRMA');
                             $stoc = (int) ($soldFirma?->cantitate_fizica ?? 0);
                             $formId = 'editare-rapida-'.$produs->id;
+                            $deleteFormId = 'stergere-produs-'.$produs->id;
                         @endphp
                         <tr>
                             <td>
                                 <form id="{{ $formId }}" method="post" action="{{ route('produse.update-rapid', $produs) }}">
                                     @csrf
                                     @method('patch')
+                                </form>
+                                <form id="{{ $deleteFormId }}" method="post" action="{{ route('produse.destroy', $produs) }}" onsubmit="return confirm(@js('Ștergi definitiv produsul '.$produs->cod_produs.' '.$produs->denumire_engleza.'?'));">
+                                    @csrf
+                                    @method('delete')
                                 </form>
                                 <code>{{ $produs->cod_fgo }}</code>
                             </td>
@@ -84,6 +89,7 @@
                             <td class="row-actions">
                                 <button form="{{ $formId }}" type="submit">Salvează</button>
                                 <a class="button-secondary" href="{{ route('produse.edit-detalii', $produs) }}">Detalii</a>
+                                <button class="button-danger" form="{{ $deleteFormId }}" type="submit">Șterge</button>
                             </td>
                         </tr>
                     @endforeach

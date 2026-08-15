@@ -43,6 +43,7 @@
         .search { display:flex; gap:8px; }
         input[type=search] { min-width:300px; border:1px solid #bdcbd7; border-radius:9px; padding:10px 12px; font:inherit; }
         button { border:0; border-radius:9px; padding:10px 16px; background:var(--blue); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+        .button-danger { background:#b91c1c; }
         input, textarea, select { border:1px solid #bdcbd7; border-radius:8px; padding:8px 9px; background:#fff; color:var(--ink); font:inherit; }
         textarea { resize:vertical; }
         .table-wrap { overflow:auto; }
@@ -60,6 +61,7 @@
         .row-actions button { width:auto; padding:6px 8px; border-radius:6px; font-size:11px; }
         .button-secondary { display:inline-block; margin-top:7px; width:100%; padding:8px 10px; border:1px solid #9eb2c4; border-radius:8px; color:var(--blue); background:#fff; text-align:center; text-decoration:none; font-weight:700; }
         .row-actions .button-secondary { width:auto; margin:0; padding:5px 7px; border-radius:6px; font-size:11px; }
+        .row-actions .button-danger { width:auto; margin:0; padding:5px 7px; border-radius:6px; font-size:11px; }
         .form-panel { max-width:900px; padding:22px; }
         .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
         .form-grid label { display:block; }

@@ -40,7 +40,7 @@
         @else
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Număr</th><th>Data</th><th>Furnizor</th><th>Poziții</th><th>Total</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Număr</th><th>Data</th><th>Furnizor</th><th>Poziții</th><th>Total</th><th>Status</th><th>Acțiuni</th></tr></thead>
                     <tbody>
                     @foreach($facturi as $factura)
                         <tr>
@@ -49,7 +49,19 @@
                             <td>{{ $factura->furnizor->denumire }}</td>
                             <td>{{ $factura->linii->count() }}</td>
                             <td class="money"><strong>{{ number_format((float) $factura->total_factura, 2, ',', '.') }}</strong> {{ $factura->moneda }}</td>
-                            <td><span class="pill">{{ str_replace('_', ' ', $factura->status) }}</span></td>
+                            <td>
+                                <span class="pill">{{ $factura->status === 'import_partial' ? 'Import parțial' : ($factura->status === 'import_finalizat' ? 'Import finalizat' : str_replace('_', ' ', $factura->status)) }}</span>
+                            </td>
+                            <td class="row-actions">
+                                <a class="button-secondary" href="{{ route('facturi-furnizori.show', $factura) }}">{{ $factura->status === 'import_partial' ? 'Continuă' : 'Detalii' }}</a>
+                                @if(!$factura->receptie)
+                                    <form method="post" action="{{ route('facturi-furnizori.destroy', $factura) }}" onsubmit="return confirm(@js('Ștergi definitiv factura '.$factura->numar_original.'? Documentul va putea fi reimportat.'));">
+                                        @csrf
+                                        @method('delete')
+                                        <button class="button-danger" type="submit">Șterge</button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>
