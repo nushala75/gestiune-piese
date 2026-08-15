@@ -6,6 +6,7 @@ use App\Models\Categorie;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Models\UnitateMasura;
+use App\Services\NecesarAprovizionareService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Contracts\View\View;
@@ -69,11 +70,17 @@ class ProdusController extends Controller
         return view('produse.index', compact('produse', 'cautare', 'categorii', 'categorieSelectata', 'filtruStoc'));
     }
 
-    public function updateRapid(Request $request, Produs $produs): RedirectResponse
+    public function updateRapid(Request $request, Produs $produs, NecesarAprovizionareService $necesarAprovizionare): RedirectResponse
     {
         $date = $request->validate([
             'stoc' => ['required', 'integer', 'min:0'],
             'pret_vanzare_cu_tva' => ['required', 'decimal:0,2', 'min:0'],
+            'cantitate_de_comandat' => ['nullable', 'integer', 'min:0'],
+            'furnizor_comanda_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('produse_furnizori', 'furnizor_id')->where('produs_id', $produs->id),
+            ],
         ]);
 
         $gestiune = Gestiune::query()
@@ -85,11 +92,19 @@ class ProdusController extends Controller
             ->dividedBy('1.21', 4, RoundingMode::HalfUp)
             ->__toString();
 
-        DB::transaction(function () use ($date, $gestiune, $pretFaraTva, $produs): void {
-            $produs->update([
+        DB::transaction(function () use ($date, $gestiune, $necesarAprovizionare, $pretFaraTva, $produs): void {
+            $actualizariProdus = [
                 'pret_vanzare_cu_tva' => $date['pret_vanzare_cu_tva'],
                 'pret_vanzare_fara_tva' => $pretFaraTva,
-            ]);
+            ];
+            if (array_key_exists('cantitate_de_comandat', $date)) {
+                $actualizariProdus['cantitate_de_comandat'] = $date['cantitate_de_comandat'];
+            }
+            if (array_key_exists('furnizor_comanda_id', $date)) {
+                $actualizariProdus['furnizor_comanda_id'] = $date['furnizor_comanda_id'];
+                $actualizariProdus['furnizor_comanda_manual'] = $date['furnizor_comanda_id'] !== null;
+            }
+            $produs->update($actualizariProdus);
 
             DB::table('solduri_stoc')->updateOrInsert(
                 ['gestiune_id' => $gestiune->id, 'produs_id' => $produs->id],
@@ -98,6 +113,8 @@ class ProdusController extends Controller
                     'updated_at' => now(),
                 ],
             );
+
+            $necesarAprovizionare->sincronizeaza($produs, $gestiune);
         });
 
         return back()->with('status', "Produsul {$produs->cod_produs} a fost actualizat.");
@@ -120,7 +137,7 @@ class ProdusController extends Controller
         ]);
     }
 
-    public function updateDetalii(Request $request, Produs $produs): RedirectResponse
+    public function updateDetalii(Request $request, Produs $produs, NecesarAprovizionareService $necesarAprovizionare): RedirectResponse
     {
         $mapareFurnizor = $produs->furnizori()
             ->orderByDesc('data_ultimei_achizitii')
@@ -165,7 +182,7 @@ class ProdusController extends Controller
             ->dividedBy('1.21', 4, RoundingMode::HalfUp)
             ->__toString();
 
-        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $pretFaraTva, $produs): void {
+        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $pretFaraTva, $produs): void {
             $produs->update([
                 'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
                 'denumire_engleza' => mb_strtoupper(trim($date['denumire_engleza'])),
@@ -198,6 +215,8 @@ class ProdusController extends Controller
                     'updated_at' => now(),
                 ],
             );
+
+            $necesarAprovizionare->sincronizeaza($produs, $gestiune);
         });
 
         return redirect()

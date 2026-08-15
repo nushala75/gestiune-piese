@@ -12,6 +12,7 @@ use App\Models\ProdusFurnizor;
 use App\Models\UnitateMasura;
 use App\Services\CodFgoAllocator;
 use App\Services\MotoTrendInvoiceParser;
+use App\Services\NecesarAprovizionareService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Contracts\View\View;
@@ -197,8 +198,12 @@ class FacturaFurnizorImportController extends Controller
         ]);
     }
 
-    public function storeNewProduct(Request $request, int $line, CodFgoAllocator $allocator): RedirectResponse
-    {
+    public function storeNewProduct(
+        Request $request,
+        int $line,
+        CodFgoAllocator $allocator,
+        NecesarAprovizionareService $necesarAprovizionare,
+    ): RedirectResponse {
         $draft = $request->session()->get(self::SESSION_KEY);
         if (! is_array($draft)
             || ! hash_equals((string) ($draft['token'] ?? ''), (string) $request->input('token'))
@@ -243,7 +248,7 @@ class FacturaFurnizorImportController extends Controller
             ->__toString();
 
         try {
-            $product = DB::transaction(function () use ($allocator, $data, $draft, $invoiceLine, $pretFaraTva): Produs {
+            $product = DB::transaction(function () use ($allocator, $data, $draft, $invoiceLine, $necesarAprovizionare, $pretFaraTva): Produs {
                 $supplier = Furnizor::query()->firstOrCreate(
                     ['cod_fiscal' => $draft['invoice']['supplier_vat']],
                     [
@@ -286,6 +291,8 @@ class FacturaFurnizorImportController extends Controller
                     'data_ultimei_achizitii' => $draft['invoice']['invoice_date'],
                     'confirmata_manual' => true,
                 ]);
+
+                $necesarAprovizionare->sincronizeaza($product);
 
                 return $product;
             });
@@ -416,6 +423,7 @@ class FacturaFurnizorImportController extends Controller
         FacturaFurnizor $factura,
         FacturaFurnizorLinie $linie,
         CodFgoAllocator $allocator,
+        NecesarAprovizionareService $necesarAprovizionare,
     ): RedirectResponse {
         if ($factura->tip_document === 'storno') {
             return redirect()->route('facturi-furnizori.show', $factura)
@@ -454,7 +462,7 @@ class FacturaFurnizorImportController extends Controller
             ->__toString();
 
         try {
-            $product = DB::transaction(function () use ($allocator, $data, $factura, $linie, $pretFaraTva): Produs {
+            $product = DB::transaction(function () use ($allocator, $data, $factura, $linie, $necesarAprovizionare, $pretFaraTva): Produs {
                 $product = Produs::query()->create([
                     'cod_fgo' => $allocator->aloca(),
                     'cod_produs' => mb_strtoupper(trim($data['cod_produs'])),
@@ -487,6 +495,8 @@ class FacturaFurnizorImportController extends Controller
                         'confirmata_manual' => true,
                     ],
                 );
+
+                $necesarAprovizionare->sincronizeaza($product);
 
                 $linie->update(['produs_id' => $product->id, 'status_mapare' => 'mapat', 'observatii' => null]);
                 $factura->update(['status' => 'import_partial']);

@@ -14,6 +14,8 @@ class Produs extends Model
     {
         return [
             'stoc_minim' => 'integer',
+            'cantitate_de_comandat' => 'integer',
+            'furnizor_comanda_manual' => 'boolean',
             'pret_vanzare_fara_tva' => 'decimal:4',
             'pret_vanzare_cu_tva' => 'decimal:2',
             'cota_tva' => 'decimal:2',
@@ -39,6 +41,11 @@ class Produs extends Model
     public function furnizori()
     {
         return $this->hasMany(ProdusFurnizor::class);
+    }
+
+    public function furnizorComanda()
+    {
+        return $this->belongsTo(Furnizor::class, 'furnizor_comanda_id');
     }
 
     public function liniiFactura()

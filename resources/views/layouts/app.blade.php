@@ -63,6 +63,8 @@
         td.money small { display:block; margin-top:3px; color:var(--muted); }
         .number-with-unit { display:flex; align-items:center; gap:6px; }
         .number-with-unit input { width:62px; padding:5px 6px; }
+        .quantity-order-input { width:72px; padding:5px 6px; }
+        .supplier-order-select { width:170px; padding:5px 6px; }
         .row-actions { min-width:126px; display:flex; gap:4px; }
         .row-actions button { width:auto; padding:6px 8px; border-radius:6px; font-size:11px; }
         .button-secondary { display:inline-block; margin-top:7px; width:100%; padding:8px 10px; border:1px solid #9eb2c4; border-radius:8px; color:var(--blue); background:#fff; text-align:center; text-decoration:none; font-weight:700; }

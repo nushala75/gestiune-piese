@@ -64,7 +64,7 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Cod FGO</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>Intrare EUR</th><th>Vânzare cu TVA</th><th>Acțiuni</th>
+                        <th>Cod FGO</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>De comandat</th><th>Furnizor comandă</th><th>Intrare EUR</th><th>Vânzare cu TVA</th><th>Acțiuni</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -73,6 +73,8 @@
                             $mapare = $produs->furnizori->sortByDesc('data_ultimei_achizitii')->first();
                             $soldFirma = $produs->solduriStoc->first(fn ($sold) => $sold->gestiune?->cod === 'FIRMA');
                             $stoc = (int) ($soldFirma?->cantitate_fizica ?? 0);
+                            $necesitaComanda = $stoc < (int) $produs->stoc_minim;
+                            $mapariFurnizori = $produs->furnizori->unique('furnizor_id')->values();
                             $formId = 'editare-rapida-'.$produs->id;
                             $deleteFormId = 'stergere-produs-'.$produs->id;
                         @endphp
@@ -98,6 +100,26 @@
                                     <input form="{{ $formId }}" type="number" name="stoc" value="{{ $stoc }}" min="0" step="1" required>
                                     <span>{{ $produs->unitateMasura->cod }}</span>
                                 </div>
+                            </td>
+                            <td>
+                                @if($necesitaComanda)
+                                    <input form="{{ $formId }}" class="quantity-order-input" type="number" name="cantitate_de_comandat" value="{{ $produs->cantitate_de_comandat }}" min="1" step="1" required>
+                                @else
+                                    <span>—</span>
+                                @endif
+                            </td>
+                            <td>
+                                @if($necesitaComanda && $mapariFurnizori->isNotEmpty())
+                                    <select form="{{ $formId }}" class="supplier-order-select" name="furnizor_comanda_id" required>
+                                        @foreach($mapariFurnizori as $mapareFurnizor)
+                                            <option value="{{ $mapareFurnizor->furnizor_id }}" @selected((int) $produs->furnizor_comanda_id === $mapareFurnizor->furnizor_id)>{{ $mapareFurnizor->furnizor->denumire }}</option>
+                                        @endforeach
+                                    </select>
+                                @elseif($necesitaComanda)
+                                    <span class="danger">Fără furnizor mapat</span>
+                                @else
+                                    <span>—</span>
+                                @endif
                             </td>
                             <td class="money">
                                 @if($mapare)

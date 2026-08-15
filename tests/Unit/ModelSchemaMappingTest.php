@@ -65,6 +65,7 @@ class ModelSchemaMappingTest extends TestCase
     public function test_all_quantity_casts_are_integers(): void
     {
         $this->assertSame('integer', (new Produs)->getCasts()['stoc_minim']);
+        $this->assertSame('integer', (new Produs)->getCasts()['cantitate_de_comandat']);
         $this->assertSame('integer', (new FacturaFurnizorLinie)->getCasts()['cantitate']);
         $this->assertSame('integer', (new ReceptieLinie)->getCasts()['cantitate']);
         $this->assertSame('integer', (new MiscareStoc)->getCasts()['cantitate']);

@@ -60,6 +60,9 @@ class ProduseTestSeederTest extends TestCase
             $table->unsignedBigInteger('unitate_masura_id');
             $table->string('marca')->nullable();
             $table->bigInteger('stoc_minim')->default(1);
+            $table->bigInteger('cantitate_de_comandat')->default(0);
+            $table->unsignedBigInteger('furnizor_comanda_id')->nullable();
+            $table->boolean('furnizor_comanda_manual')->default(false);
             $table->decimal('pret_vanzare_fara_tva', 18, 4)->nullable();
             $table->decimal('pret_vanzare_cu_tva', 18, 2)->nullable();
             $table->decimal('cota_tva', 5, 2)->default(21);
@@ -119,6 +122,8 @@ class ProduseTestSeederTest extends TestCase
             'pret_achizitie_ultim' => 2.0633,
             'moneda' => 'EUR',
         ]);
+        $this->assertSame(2, DB::table('produse')->where('cantitate_de_comandat', 1)->count());
+        $this->assertSame(0, DB::table('produse')->where('cantitate_de_comandat', 1)->whereNull('furnizor_comanda_id')->count());
     }
 
     public function test_products_page_displays_seeded_data(): void
@@ -132,10 +137,77 @@ class ProduseTestSeederTest extends TestCase
             ->assertSee('2.0633')
             ->assertSee('name="stoc"', false)
             ->assertSee('name="pret_vanzare_cu_tva"', false)
+            ->assertSee('name="cantitate_de_comandat"', false)
+            ->assertSee('name="furnizor_comanda_id"', false)
             ->assertDontSee('name="denumire_engleza"', false)
             ->assertDontSee('name="descriere_romana"', false)
             ->assertDontSee('name="pret_intrare"', false)
             ->assertDontSee('Vânzare fără TVA');
+    }
+
+    public function test_reorder_suggestion_starts_at_one_keeps_manual_supplier_and_resets_at_minimum_stock(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $produs = DB::table('produse')->where('cod_produs', '11102-1G87-004')->first();
+        $initialSupplierId = DB::table('produse_furnizori')->where('produs_id', $produs->id)->value('furnizor_id');
+
+        $this->patch("/produse/{$produs->id}/editare-rapida", [
+            'stoc' => 0,
+            'pret_vanzare_cu_tva' => '25.00',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('produse', [
+            'id' => $produs->id,
+            'cantitate_de_comandat' => 1,
+            'furnizor_comanda_id' => $initialSupplierId,
+            'furnizor_comanda_manual' => 0,
+        ]);
+
+        $manualSupplierId = DB::table('furnizori')->insertGetId([
+            'denumire' => 'FURNIZOR TEST',
+            'cod_fiscal' => 'ROTEST001',
+            'tara' => 'RO',
+            'moneda_implicita' => 'EUR',
+            'activ' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('produse_furnizori')->insert([
+            'produs_id' => $produs->id,
+            'furnizor_id' => $manualSupplierId,
+            'cod_furnizor' => 'TEST-'.$produs->id,
+            'denumire_furnizor' => 'PRODUS TEST',
+            'moneda' => 'EUR',
+            'confirmata_manual' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->patch("/produse/{$produs->id}/editare-rapida", [
+            'stoc' => 0,
+            'pret_vanzare_cu_tva' => '25.00',
+            'cantitate_de_comandat' => 4,
+            'furnizor_comanda_id' => $manualSupplierId,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('produse', [
+            'id' => $produs->id,
+            'cantitate_de_comandat' => 4,
+            'furnizor_comanda_id' => $manualSupplierId,
+            'furnizor_comanda_manual' => 1,
+        ]);
+
+        $this->patch("/produse/{$produs->id}/editare-rapida", [
+            'stoc' => 1,
+            'pret_vanzare_cu_tva' => '25.00',
+            'cantitate_de_comandat' => 4,
+            'furnizor_comanda_id' => $manualSupplierId,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('produse', [
+            'id' => $produs->id,
+            'cantitate_de_comandat' => 0,
+            'furnizor_comanda_id' => $manualSupplierId,
+            'furnizor_comanda_manual' => 1,
+        ]);
     }
 
     public function test_products_can_be_filtered_by_name_category_and_stock(): void

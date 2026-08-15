@@ -325,6 +325,10 @@ class FacturaFurnizorImportTest extends TestCase
             'pret_achizitie_ultim' => $line['unit_price'],
             'moneda' => 'EUR',
         ]);
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'cantitate_de_comandat' => 1,
+        ]);
         $this->assertSame($productId, session('factura_furnizor_import_preview')['invoice']['lines'][$lineIndex]['product_id']);
     }
 
@@ -411,6 +415,10 @@ class FacturaFurnizorImportTest extends TestCase
             'cod_furnizor' => '11102-1G87-004',
             'pret_achizitie_ultim' => '2.0633',
             'moneda' => 'EUR',
+        ]);
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'cantitate_de_comandat' => 0,
         ]);
 
         $stockAfterReception = (int) DB::table('solduri_stoc')
@@ -521,6 +529,11 @@ class FacturaFurnizorImportTest extends TestCase
             $initialPurchasePrice,
             DB::table('produse_furnizori')->where('produs_id', $productId)->value('pret_achizitie_ultim')
         );
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'cantitate_de_comandat' => 1,
+            'furnizor_comanda_id' => $factura->furnizor_id,
+        ]);
     }
 
     public function test_unreceived_invoice_can_be_deleted_and_reimported(): void
@@ -587,6 +600,7 @@ class FacturaFurnizorImportTest extends TestCase
             'id' => $productId,
             'cod_fgo' => '01000000',
             'activ' => 1,
+            'cantitate_de_comandat' => 1,
         ]);
         $this->assertDatabaseHas('facturi_furnizor_linii', [
             'id' => $line->id,
@@ -709,6 +723,9 @@ class FacturaFurnizorImportTest extends TestCase
             $table->unsignedBigInteger('unitate_masura_id');
             $table->string('marca')->nullable();
             $table->bigInteger('stoc_minim')->default(1);
+            $table->bigInteger('cantitate_de_comandat')->default(0);
+            $table->unsignedBigInteger('furnizor_comanda_id')->nullable();
+            $table->boolean('furnizor_comanda_manual')->default(false);
             $table->decimal('pret_vanzare_fara_tva', 18, 4)->nullable();
             $table->decimal('pret_vanzare_cu_tva', 18, 2)->nullable();
             $table->decimal('cota_tva', 5, 2)->default(21);

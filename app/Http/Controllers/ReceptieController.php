@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\FacturaFurnizor;
 use App\Models\Gestiune;
 use App\Models\MiscareStoc;
+use App\Models\Produs;
 use App\Models\ProdusFurnizor;
 use App\Models\Receptie;
 use App\Models\ReceptieLinie;
+use App\Services\NecesarAprovizionareService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Builder;
@@ -71,7 +73,7 @@ class ReceptieController extends Controller
         return view('receptii.create', compact('factura', 'avertismenteStoc'));
     }
 
-    public function store(Request $request, FacturaFurnizor $factura): RedirectResponse
+    public function store(Request $request, FacturaFurnizor $factura, NecesarAprovizionareService $necesarAprovizionare): RedirectResponse
     {
         $date = $request->validate([
             'data_receptie' => ['required', 'date'],
@@ -80,7 +82,7 @@ class ReceptieController extends Controller
             'confirmare_saga.accepted' => 'Confirmarea manuală a importului în SAGA este obligatorie.',
         ]);
 
-        DB::transaction(function () use ($date, $factura): void {
+        DB::transaction(function () use ($date, $factura, $necesarAprovizionare): void {
             $facturaBlocata = FacturaFurnizor::query()
                 ->lockForUpdate()
                 ->findOrFail($factura->id);
@@ -178,6 +180,11 @@ class ReceptieController extends Controller
                     );
                 }
             }
+
+            Produs::query()
+                ->whereIn('id', $facturaBlocata->linii->pluck('produs_id')->unique())
+                ->get()
+                ->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
         });
 
         return redirect()->route('facturi-furnizori.show', $factura)

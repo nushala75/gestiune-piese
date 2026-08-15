@@ -15,6 +15,9 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Toate cantitatile sunt numere intregi (`BIGINT`): stoc minim, linii de factura si receptie, miscari si solduri de stoc, respectiv liniile exportului FGO.
 - Stocul nu este stocat in `produse`; soldul curent este in `solduri_stoc` si istoricul in `miscari_stoc`.
 - Lista de produse permite filtre combinabile dupa denumire sau cod, categorie si stocul din gestiunea FIRMA (`pozitiv`, `zero` sau `negativ`). Produsele fara sold sunt incluse la stoc zero.
+- Cand stocul fizic din FIRMA scade sub `stoc_minim`, `cantitate_de_comandat` devine initial `1`. O cantitate modificata manual se pastreaza cat timp stocul ramane sub prag; la atingerea sau depasirea stocului minim se reseteaza automat la `0`.
+- Furnizorul propus pentru comanda trebuie sa fie mapat produsului. Selectia manuala are prioritate si se pastreaza; in lipsa ei se foloseste furnizorul celei mai recente achizitii, ordonat dupa data achizitiei si apoi dupa maparea cea mai noua.
+- Estimarea viitoare pe baza rulajului va inlocui valoarea initiala `1` numai dupa confirmarea formulei si a perioadei analizate.
 - Tipul contabil SAGA `Marfuri gestiune 1 firma` este o regula fixa de export, nu o coloana duplicata in `produse`.
 - Stocul este explicat prin `miscari_stoc`; `solduri_stoc` este soldul operational actualizat tranzactional.
 - Amount-ul liniei MOTO TREND ramane sursa de adevar. Pretul calculat are precizie extinsa.

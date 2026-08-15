@@ -9,6 +9,7 @@ use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Models\ProdusFurnizor;
 use App\Models\UnitateMasura;
+use App\Services\NecesarAprovizionareService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -103,6 +104,8 @@ class ProduseTestSeeder extends Seeder
                         'updated_at' => now(),
                     ],
                 );
+
+                app(NecesarAprovizionareService::class)->sincronizeaza($produs, $gestiune);
             }
         });
     }
