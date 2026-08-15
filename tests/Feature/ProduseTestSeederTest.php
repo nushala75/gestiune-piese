@@ -128,10 +128,13 @@ class ProduseTestSeederTest extends TestCase
         $this->get('/produse')
             ->assertOk()
             ->assertSee('00445402')
-            ->assertSee('11102-1G87-004')
-            ->assertSee('value="RUB BUSH ENG HANGER"', false)
+            ->assertSee('11102-1G87-004 RUB BUSH ENG HANGER')
             ->assertSee('2.0633')
-            ->assertSee('name="descriere_romana"', false)
+            ->assertSee('name="stoc"', false)
+            ->assertSee('name="pret_vanzare_cu_tva"', false)
+            ->assertDontSee('name="denumire_engleza"', false)
+            ->assertDontSee('name="descriere_romana"', false)
+            ->assertDontSee('name="pret_intrare"', false)
             ->assertDontSee('Vânzare fără TVA');
     }
 
@@ -141,23 +144,20 @@ class ProduseTestSeederTest extends TestCase
         $produsId = DB::table('produse')->where('cod_fgo', '00445402')->value('id');
 
         $this->patch("/produse/{$produsId}/editare-rapida", [
-            'denumire_engleza' => 'rub bush updated',
-            'descriere_romana' => 'Bucșă actualizată',
             'stoc' => 17,
-            'pret_intrare' => '2.1234',
             'pret_vanzare_cu_tva' => '121.00',
         ])->assertRedirect();
 
         $this->assertDatabaseHas('produse', [
             'id' => $produsId,
-            'denumire_engleza' => 'RUB BUSH UPDATED',
-            'descriere_romana' => 'Bucșă actualizată',
+            'denumire_engleza' => 'RUB BUSH ENG HANGER',
+            'descriere_romana' => 'Bucsa motor',
             'pret_vanzare_fara_tva' => 100.0000,
             'pret_vanzare_cu_tva' => 121.00,
         ]);
         $this->assertDatabaseHas('produse_furnizori', [
             'produs_id' => $produsId,
-            'pret_achizitie_ultim' => 2.1234,
+            'pret_achizitie_ultim' => 2.0633,
         ]);
         $this->assertDatabaseHas('solduri_stoc', [
             'produs_id' => $produsId,
@@ -179,10 +179,15 @@ class ProduseTestSeederTest extends TestCase
 
         $this->patch("/produse/{$produs->id}/detalii", [
             'cod_produs' => '11102-1g87-004-x',
+            'denumire_engleza' => 'rub bush updated',
+            'descriere_romana' => 'Bucșă actualizată',
             'categorie_id' => $categorie->id,
             'unitate_masura_id' => $unitate->id,
             'marca' => 'kymco test',
             'stoc_minim' => 3,
+            'stoc' => 19,
+            'pret_intrare' => '2.1234',
+            'pret_vanzare_cu_tva' => '121.00',
             'cota_tva' => '21.00',
             'greutate_kg' => '1.250',
             'voluminos' => 1,
@@ -195,11 +200,23 @@ class ProduseTestSeederTest extends TestCase
         $this->assertDatabaseHas('produse', [
             'id' => $produs->id,
             'cod_produs' => '11102-1G87-004-X',
+            'denumire_engleza' => 'RUB BUSH UPDATED',
+            'descriere_romana' => 'Bucșă actualizată',
             'categorie_id' => $categorie->id,
             'unitate_masura_id' => $unitate->id,
             'marca' => 'KYMCO TEST',
             'stoc_minim' => 3,
+            'pret_vanzare_fara_tva' => 100.0000,
+            'pret_vanzare_cu_tva' => 121.00,
             'voluminos' => 1,
+        ]);
+        $this->assertDatabaseHas('produse_furnizori', [
+            'produs_id' => $produs->id,
+            'pret_achizitie_ultim' => 2.1234,
+        ]);
+        $this->assertDatabaseHas('solduri_stoc', [
+            'produs_id' => $produs->id,
+            'cantitate_fizica' => 19,
         ]);
     }
 }

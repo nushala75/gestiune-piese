@@ -33,6 +33,14 @@
                 <input type="text" name="cod_produs" value="{{ old('cod_produs', $produs->cod_produs) }}" required maxlength="64">
             </label>
             <label>
+                <span>Denumire în engleză</span>
+                <input type="text" name="denumire_engleza" value="{{ old('denumire_engleza', $produs->denumire_engleza) }}" required maxlength="255">
+            </label>
+            <label class="form-span-2">
+                <span>Descriere în română</span>
+                <textarea name="descriere_romana" rows="2">{{ old('descriere_romana', $produs->descriere_romana) }}</textarea>
+            </label>
+            <label>
                 <span>Categorie</span>
                 <select name="categorie_id" required>
                     @foreach($categorii as $categorie)
@@ -55,6 +63,22 @@
             <label>
                 <span>Stoc minim</span>
                 <input type="number" name="stoc_minim" value="{{ old('stoc_minim', $produs->stoc_minim) }}" min="0" step="1" required>
+            </label>
+            <label>
+                <span>Stoc actual</span>
+                <input type="number" name="stoc" value="{{ old('stoc', $stoc) }}" min="0" step="1" required>
+            </label>
+            <label>
+                <span>Preț intrare (EUR)</span>
+                @if($mapareFurnizor)
+                    <input type="number" name="pret_intrare" value="{{ old('pret_intrare', number_format((float) $mapareFurnizor->pret_achizitie_ultim, 4, '.', '')) }}" min="0" step="0.0001" required>
+                @else
+                    <input type="text" value="Fără furnizor asociat" disabled>
+                @endif
+            </label>
+            <label>
+                <span>Preț vânzare cu TVA (RON)</span>
+                <input type="number" name="pret_vanzare_cu_tva" value="{{ old('pret_vanzare_cu_tva', number_format((float) $produs->pret_vanzare_cu_tva, 2, '.', '')) }}" min="0" step="0.01" required>
             </label>
             <label>
                 <span>TVA (%)</span>

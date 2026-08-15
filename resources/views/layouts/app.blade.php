@@ -24,7 +24,7 @@
         .topbar { height:72px; display:flex; justify-content:space-between; align-items:center; padding:0 32px; background:#fff; border-bottom:1px solid var(--line); }
         .topbar strong { font-size:18px; }
         .company { color:var(--muted); font-size:13px; }
-        .content { padding:30px 32px 48px; }
+        .content { padding:22px 24px 40px; }
         .page-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:24px; }
         h1 { margin:0 0 4px; font-size:28px; letter-spacing:-.02em; }
         .lead { margin:0; color:var(--muted); }
@@ -34,7 +34,7 @@
         .card span { color:var(--muted); }
         .card strong { display:block; margin-top:6px; font-size:30px; }
         .panel { overflow:hidden; }
-        .panel-head { padding:18px 20px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
+        .panel-head { padding:12px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; }
         .panel-head h2 { margin:0; font-size:17px; }
         .quick { margin-top:20px; padding:20px; }
         .quick-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:14px; }
@@ -46,26 +46,27 @@
         input, textarea, select { border:1px solid #bdcbd7; border-radius:8px; padding:8px 9px; background:#fff; color:var(--ink); font:inherit; }
         textarea { resize:vertical; }
         .table-wrap { overflow:auto; }
-        table { width:100%; border-collapse:collapse; white-space:nowrap; }
-        th { padding:11px 14px; text-align:left; background:#edf3f8; color:#41566a; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-        td { padding:12px 14px; border-top:1px solid #e7edf2; vertical-align:top; }
-        td.name { white-space:normal; min-width:260px; }
-        .editable-name { min-width:330px; }
-        .editable-name label { display:block; margin-top:8px; }
-        .editable-name label span { display:block; margin-bottom:3px; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; }
-        .editable-name input, .editable-name textarea { width:100%; }
-        td.money input { width:112px; text-align:right; font-variant-numeric:tabular-nums; }
+        table { width:100%; border-collapse:collapse; white-space:nowrap; font-size:12px; }
+        th { padding:7px 8px; text-align:left; background:#edf3f8; color:#41566a; font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
+        td { padding:7px 8px; border-top:1px solid #e7edf2; vertical-align:middle; }
+        td.name { white-space:normal; min-width:220px; }
+        .product-summary strong, .product-summary small { display:block; }
+        .product-summary small { margin-top:2px; color:var(--muted); font-size:11px; }
+        td.money input { width:84px; padding:5px 6px; text-align:right; font-variant-numeric:tabular-nums; }
         td.money small { display:block; margin-top:3px; color:var(--muted); }
         .number-with-unit { display:flex; align-items:center; gap:6px; }
-        .number-with-unit input { width:90px; }
-        .row-actions { min-width:110px; }
-        .row-actions button { width:100%; }
+        .number-with-unit input { width:62px; padding:5px 6px; }
+        .row-actions { min-width:126px; display:flex; gap:4px; }
+        .row-actions button { width:auto; padding:6px 8px; border-radius:6px; font-size:11px; }
         .button-secondary { display:inline-block; margin-top:7px; width:100%; padding:8px 10px; border:1px solid #9eb2c4; border-radius:8px; color:var(--blue); background:#fff; text-align:center; text-decoration:none; font-weight:700; }
+        .row-actions .button-secondary { width:auto; margin:0; padding:5px 7px; border-radius:6px; font-size:11px; }
         .form-panel { max-width:900px; padding:22px; }
         .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
         .form-grid label { display:block; }
         .form-grid label > span { display:block; margin-bottom:5px; color:#41566a; font-weight:700; }
         .form-grid input, .form-grid select { width:100%; }
+        .form-grid textarea { width:100%; }
+        .form-span-2 { grid-column:1 / -1; }
         .form-check { display:flex !important; align-items:center; gap:9px; padding-top:28px; }
         .form-check input { width:auto; }
         .form-check span { margin:0 !important; }

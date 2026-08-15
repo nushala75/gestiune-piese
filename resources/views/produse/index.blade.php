@@ -58,16 +58,9 @@
                                 </form>
                                 <code>{{ $produs->cod_fgo }}</code>
                             </td>
-                            <td class="name editable-name">
-                                <strong>{{ $produs->cod_produs }}</strong>
-                                <label>
-                                    <span>Denumire în engleză</span>
-                                    <input form="{{ $formId }}" type="text" name="denumire_engleza" value="{{ $produs->denumire_engleza }}" required maxlength="255">
-                                </label>
-                                <label>
-                                    <span>Descriere în română</span>
-                                    <textarea form="{{ $formId }}" name="descriere_romana" rows="2">{{ $produs->descriere_romana }}</textarea>
-                                </label>
+                            <td class="name product-summary">
+                                <strong>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</strong>
+                                <small>{{ $produs->descriere_romana ?: 'Fără descriere în română' }}</small>
                             </td>
                             <td><span class="pill">{{ $produs->categorie->denumire }}</span></td>
                             <td>
@@ -78,7 +71,7 @@
                             </td>
                             <td class="money">
                                 @if($mapare)
-                                    <input form="{{ $formId }}" type="number" name="pret_intrare" value="{{ number_format((float) $mapare->pret_achizitie_ultim, 4, '.', '') }}" min="0" step="0.0001" required>
+                                    <strong>{{ number_format((float) $mapare->pret_achizitie_ultim, 4, '.', '') }}</strong>
                                     <small>EUR</small>
                                 @else
                                     <span>Fără furnizor</span>
@@ -90,7 +83,7 @@
                             </td>
                             <td class="row-actions">
                                 <button form="{{ $formId }}" type="submit">Salvează</button>
-                                <a class="button-secondary" href="{{ route('produse.edit-detalii', $produs) }}">Edit detalii</a>
+                                <a class="button-secondary" href="{{ route('produse.edit-detalii', $produs) }}">Detalii</a>
                             </td>
                         </tr>
                     @endforeach
