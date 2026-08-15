@@ -95,8 +95,9 @@ class MotoTrendInvoiceParser
             fn (array $line): int => $line['valid'] ? (int) $line['quantity'] : 0,
             $lines,
         ));
+        $hasInvalidLines = count(array_filter($lines, fn (array $line): bool => ! $line['valid'])) > 0;
 
-        if ($unparsed === [] && ($parsedAmountCents !== (int) round((float) $expectedAmount * 100) || $parsedQuantity !== $expectedQuantity)) {
+        if (! $hasInvalidLines && ($parsedAmountCents !== (int) round((float) $expectedAmount * 100) || $parsedQuantity !== $expectedQuantity)) {
             throw new RuntimeException('Suma sau cantitatea pozițiilor nu corespunde totalului facturii.');
         }
 
@@ -121,7 +122,7 @@ class MotoTrendInvoiceParser
     private function parseLine(string $sourceLine, int $lineNumber): ?array
     {
         if (preg_match(
-            '/^\s*(\d+)\s+(\d+,\d{2})\s+(\d+,\d{1,2})\s+(\d+,\d{2})(.+)$/u',
+            '/^\s*(\d+)\s+(\d+,\d{2})\s+(\d+,\d{1,2})(?:\s+(\d+,\d{1,2}))?\s+(\d+,\d{2})(.+)$/u',
             $sourceLine,
             $match,
         ) !== 1) {
@@ -129,10 +130,10 @@ class MotoTrendInvoiceParser
         }
 
         $quantity = (int) $match[1];
-        $amount = $this->decimal($match[4]);
-        $middle = trim($match[5]);
+        $amount = $this->decimal($match[5]);
+        $middle = trim($match[6]);
         if (preg_match(
-            '/^(?<code>\S+?)\d+,\d{2}\s+(?<description>.+)\k<code>$/u',
+            '/^(?<code>\S+?)\d+,\d{2}(?:\s+(?<description>.*?))?\k<code>$/u',
             $middle,
             $descriptionMatch,
         ) !== 1) {
@@ -140,8 +141,13 @@ class MotoTrendInvoiceParser
         }
 
         $supplierCode = trim($descriptionMatch['code']);
-        $description = trim($descriptionMatch['description']);
+        $description = trim($descriptionMatch['description'] ?? '');
         $valid = $quantity > 0 && $supplierCode !== '' && $description !== '';
+        $error = $valid
+            ? null
+            : ($description === ''
+                ? 'Description of Goods lipsește. Completează descrierea înainte de salvare.'
+                : 'Verifică manual codul, descrierea, cantitatea și valoarea.');
 
         return [
             'line_number' => $lineNumber,
@@ -153,7 +159,7 @@ class MotoTrendInvoiceParser
                 ? BigDecimal::of($amount)->dividedBy($quantity, 4, RoundingMode::HalfUp)->__toString()
                 : '',
             'valid' => $valid,
-            'error' => $valid ? null : 'Verifică manual codul, descrierea, cantitatea și valoarea.',
+            'error' => $error,
             'source' => trim($sourceLine),
         ];
     }

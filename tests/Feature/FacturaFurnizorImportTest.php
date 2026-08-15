@@ -62,6 +62,22 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertSame('SPECIAL PRODUCT', $line['description']);
     }
 
+    public function test_parser_preserves_available_values_when_the_product_description_is_missing(): void
+    {
+        $parser = new MotoTrendInvoiceParser(new Parser);
+        $method = new \ReflectionMethod($parser, 'parseLine');
+        $line = $method->invoke($parser, '3 15,97 35,0 10,0 28,03FS-11644169,00FS-116441', 68);
+
+        $this->assertIsArray($line);
+        $this->assertFalse($line['valid']);
+        $this->assertSame('FS-116441', $line['supplier_code']);
+        $this->assertSame('', $line['description']);
+        $this->assertSame(3, $line['quantity']);
+        $this->assertSame('28.03', $line['amount']);
+        $this->assertSame('9.3433', $line['unit_price']);
+        $this->assertSame('Description of Goods lipsește. Completează descrierea înainte de salvare.', $line['error']);
+    }
+
     public function test_invoice_is_previewed_then_saved_with_automatic_mappings(): void
     {
         Storage::fake('local');
@@ -169,6 +185,80 @@ class FacturaFurnizorImportTest extends TestCase
         $this->post('/facturi-furnizori/incarcare', [
             'factura_pdf' => UploadedFile::fake()->createWithContent('duplicat.pdf', file_get_contents($this->invoicePath())),
         ])->assertRedirect()->assertSessionHasErrors('factura_pdf');
+    }
+
+    public function test_existing_product_with_an_incomplete_invoice_line_opens_manual_preview_instead_of_failing(): void
+    {
+        Storage::fake('local');
+        $supplierId = DB::table('furnizori')->where('cod_fiscal', 'EL094496688')->value('id');
+        $productId = DB::table('produse')->value('id');
+        DB::table('produse_furnizori')->updateOrInsert(
+            ['furnizor_id' => $supplierId, 'cod_furnizor' => 'FS-116441'],
+            [
+                'produs_id' => $productId,
+                'denumire_furnizor' => 'FS-116441',
+                'moneda' => 'EUR',
+                'confirmata_manual' => true,
+            ],
+        );
+
+        $this->mock(MotoTrendInvoiceParser::class, function ($mock): void {
+            $mock->shouldReceive('parse')->once()->andReturn([
+                'supplier_vat' => 'EL094496688',
+                'customer_vat' => 'RO20548513',
+                'invoice_number' => 'TEST-FS-116441',
+                'invoice_date' => '2026-06-18',
+                'currency' => 'EUR',
+                'total_amount' => '28.03',
+                'total_quantity' => 3,
+                'lines' => [[
+                    'line_number' => 1,
+                    'supplier_code' => 'FS-116441',
+                    'description' => '',
+                    'quantity' => '',
+                    'amount' => '',
+                    'unit_price' => '',
+                    'valid' => false,
+                    'error' => 'Linia nu a putut fi citită. Completează manual câmpurile.',
+                    'source' => '3 15,97 35,0 10,0 28,03 FS-116441',
+                ]],
+            ]);
+        });
+
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('fs-116441.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $this->get('/facturi-furnizori/previzualizare')
+            ->assertOk()
+            ->assertSee('FS-116441')
+            ->assertSee('Completează manual câmpurile.')
+            ->assertDontSee('Preț propus');
+    }
+
+    public function test_invoice_cannot_be_saved_without_description_of_goods(): void
+    {
+        Storage::fake('local');
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $lines = collect($draft['invoice']['lines'])->map(fn (array $line): array => [
+            'supplier_code' => $line['supplier_code'],
+            'description' => $line['description'],
+            'quantity' => $line['quantity'],
+            'amount' => $line['amount'],
+            'product_id' => $line['product_id'],
+        ])->all();
+        $lines[0]['description'] = '';
+
+        $this->post('/facturi-furnizori/import', [
+            'token' => $draft['token'],
+            'lines' => $lines,
+        ])->assertSessionHasErrors('lines.0.description');
+
+        $this->assertDatabaseCount('facturi_furnizor', 0);
     }
 
     public function test_unmapped_invoice_line_can_create_and_activate_a_new_product(): void

@@ -123,6 +123,8 @@ class ProdusController extends Controller
             'latime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'activ' => ['required', 'boolean'],
+        ], [
+            'denumire_engleza.required' => 'Description of Goods este obligatorie pentru salvarea produsului.',
         ]);
 
         $gestiune = Gestiune::query()

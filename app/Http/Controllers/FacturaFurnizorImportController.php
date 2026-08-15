@@ -103,6 +103,7 @@ class FacturaFurnizorImportController extends Controller
                 ? BigDecimal::of($line['unit_price'])->multipliedBy(self::SALE_PRICE_MULTIPLIER)->toScale(2, RoundingMode::HalfUp)->__toString()
                 : null;
             $line['price_warning'] = $mapping?->produs !== null
+                && $line['proposed_sale_price'] !== null
                 && ($line['current_sale_price'] === null
                     || BigDecimal::of($line['proposed_sale_price'])->isGreaterThan($line['current_sale_price']));
         }
@@ -203,6 +204,8 @@ class FacturaFurnizorImportController extends Controller
             'latime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'activ' => ['required', 'boolean'],
+        ], [
+            'denumire_engleza.required' => 'Description of Goods este obligatorie pentru salvarea produsului.',
         ]);
 
         $pretFaraTva = BigDecimal::of($data['pret_vanzare_cu_tva'])
@@ -394,6 +397,8 @@ class FacturaFurnizorImportController extends Controller
             'latime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'activ' => ['required', 'boolean'],
+        ], [
+            'denumire_engleza.required' => 'Description of Goods este obligatorie pentru salvarea produsului.',
         ]);
 
         $pretFaraTva = BigDecimal::of($data['pret_vanzare_cu_tva'])
@@ -560,6 +565,8 @@ class FacturaFurnizorImportController extends Controller
             'lines.*.quantity' => ['required', 'integer', 'min:1'],
             'lines.*.amount' => ['required', 'decimal:0,2', 'min:0.01'],
             'lines.*.product_id' => ['nullable', 'integer', Rule::exists('produse', 'id')],
+        ], [
+            'lines.*.description.required' => 'Description of Goods este obligatorie pentru fiecare poziție.',
         ]);
 
         $invoice = $draft['invoice'];
