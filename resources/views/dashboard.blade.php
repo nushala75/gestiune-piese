@@ -17,7 +17,7 @@
     <section class="cards" aria-label="Indicatori">
         <div class="card"><span>Produse active</span><strong>{{ number_format($produseActive, 0, ',', '.') }}</strong></div>
         <div class="card"><span>Produse cu stoc</span><strong>{{ number_format($produseInStoc, 0, ',', '.') }}</strong></div>
-        <div class="card"><span>Unități în stoc</span><strong>{{ number_format((float) $unitatiInStoc, 3, ',', '.') }}</strong></div>
+        <div class="card"><span>Unități în stoc</span><strong>{{ number_format((int) $unitatiInStoc, 0, ',', '.') }}</strong></div>
     </section>
 
     <section class="panel quick">

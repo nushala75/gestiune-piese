@@ -11,6 +11,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - `produse.cod_produs` ramane separat de `cod_fgo`.
 - Preturile de vanzare sunt pastrate in `produse`, in RON.
 - Pretul de intrare si moneda furnizorului sunt pastrate in `produse_furnizori`; pretul de intrare are 4 zecimale.
+- Toate cantitatile sunt numere intregi (`BIGINT`): stoc minim, linii de factura si receptie, miscari si solduri de stoc, respectiv liniile exportului FGO.
 - Stocul nu este stocat in `produse`; soldul curent este in `solduri_stoc` si istoricul in `miscari_stoc`.
 - Tipul contabil SAGA `Marfuri gestiune 1 firma` este o regula fixa de export, nu o coloana duplicata in `produse`.
 - Stocul este explicat prin `miscari_stoc`; `solduri_stoc` este soldul operational actualizat tranzactional.

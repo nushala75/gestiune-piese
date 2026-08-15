@@ -8,7 +8,6 @@ use App\Models\Furnizor;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Models\ProdusFurnizor;
-use App\Models\SoldStoc;
 use App\Models\UnitateMasura;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -93,7 +92,7 @@ class ProduseTestSeeder extends Seeder
                     ],
                 );
 
-                SoldStoc::query()->updateOrCreate(
+                DB::table('solduri_stoc')->updateOrInsert(
                     [
                         'gestiune_id' => $gestiune->id,
                         'produs_id' => $produs->id,
@@ -101,6 +100,7 @@ class ProduseTestSeeder extends Seeder
                     [
                         'cantitate_fizica' => $date['stoc_initial'],
                         'cantitate_rezervata' => 0,
+                        'updated_at' => now(),
                     ],
                 );
             }

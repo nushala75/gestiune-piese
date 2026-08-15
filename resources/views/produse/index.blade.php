@@ -4,6 +4,18 @@
 @section('section', 'Produse')
 
 @section('content')
+    @if(session('status'))
+        <div class="success">{{ session('status') }}</div>
+    @endif
+    @if($errors->any())
+        <div class="notice">
+            <strong>Modificările nu au fost salvate.</strong>
+            <ul>
+                @foreach($errors->all() as $eroare)<li>{{ $eroare }}</li>@endforeach
+            </ul>
+        </div>
+    @endif
+
     <div class="page-head">
         <div>
             <h1>Produse</h1>
@@ -27,23 +39,59 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Cod FGO</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>Intrare EUR</th><th>Vânzare fără TVA</th><th>Vânzare cu TVA</th>
+                        <th>Cod FGO</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>Intrare EUR</th><th>Vânzare cu TVA</th><th>Acțiuni</th>
                     </tr>
                     </thead>
                     <tbody>
                     @foreach($produse as $produs)
                         @php
                             $mapare = $produs->furnizori->sortByDesc('data_ultimei_achizitii')->first();
-                            $stoc = (float) $produs->solduriStoc->sum(fn ($sold) => (float) $sold->cantitate_fizica);
+                            $soldFirma = $produs->solduriStoc->first(fn ($sold) => $sold->gestiune?->cod === 'FIRMA');
+                            $stoc = (int) ($soldFirma?->cantitate_fizica ?? 0);
+                            $formId = 'editare-rapida-'.$produs->id;
                         @endphp
                         <tr>
-                            <td><code>{{ $produs->cod_fgo }}</code></td>
-                            <td class="name"><strong>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</strong><br><small>{{ $produs->descriere_romana ?: 'Fără descriere în română' }}</small></td>
+                            <td>
+                                <form id="{{ $formId }}" method="post" action="{{ route('produse.update-rapid', $produs) }}">
+                                    @csrf
+                                    @method('patch')
+                                </form>
+                                <code>{{ $produs->cod_fgo }}</code>
+                            </td>
+                            <td class="name editable-name">
+                                <strong>{{ $produs->cod_produs }}</strong>
+                                <label>
+                                    <span>Denumire în engleză</span>
+                                    <input form="{{ $formId }}" type="text" name="denumire_engleza" value="{{ $produs->denumire_engleza }}" required maxlength="255">
+                                </label>
+                                <label>
+                                    <span>Descriere în română</span>
+                                    <textarea form="{{ $formId }}" name="descriere_romana" rows="2">{{ $produs->descriere_romana }}</textarea>
+                                </label>
+                            </td>
                             <td><span class="pill">{{ $produs->categorie->denumire }}</span></td>
-                            <td class="{{ $stoc > 0 ? 'stock-positive' : 'stock-zero' }}">{{ number_format($stoc, 3, ',', '.') }} {{ $produs->unitateMasura->cod }}</td>
-                            <td class="money">{{ $mapare?->pret_achizitie_ultim !== null ? number_format((float) $mapare->pret_achizitie_ultim, 4, ',', '.') : '—' }}</td>
-                            <td class="money">{{ number_format((float) $produs->pret_vanzare_fara_tva, 4, ',', '.') }} RON</td>
-                            <td class="money">{{ number_format((float) $produs->pret_vanzare_cu_tva, 2, ',', '.') }} RON</td>
+                            <td>
+                                <div class="number-with-unit">
+                                    <input form="{{ $formId }}" type="number" name="stoc" value="{{ $stoc }}" min="0" step="1" required>
+                                    <span>{{ $produs->unitateMasura->cod }}</span>
+                                </div>
+                            </td>
+                            <td class="money">
+                                @if($mapare)
+                                    <input form="{{ $formId }}" type="number" name="pret_intrare" value="{{ number_format((float) $mapare->pret_achizitie_ultim, 4, '.', '') }}" min="0" step="0.0001" required>
+                                    <small>EUR</small>
+                                @else
+                                    <span>Fără furnizor</span>
+                                @endif
+                            </td>
+                            <td class="money">
+                                <input form="{{ $formId }}" type="number" name="pret_vanzare_cu_tva" value="{{ number_format((float) $produs->pret_vanzare_cu_tva, 2, '.', '') }}" min="0" step="0.01" required>
+                                <small>RON</small>
+                            </td>
+                            <td class="row-actions">
+                                <button form="{{ $formId }}" type="submit">Salvează</button>
+                                <a class="button-secondary" href="{{ route('produse.edit-detalii', $produs) }}">Edit detalii</a>
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>

@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Model;
 class Produs extends Model
 {
     protected $table = 'produse';
+
     protected $guarded = ['id'];
+
     protected function casts(): array
     {
         return [
-            'stoc_minim' => 'decimal:3',
+            'stoc_minim' => 'integer',
             'pret_vanzare_fara_tva' => 'decimal:4',
             'pret_vanzare_cu_tva' => 'decimal:2',
             'cota_tva' => 'decimal:2',
@@ -24,10 +26,33 @@ class Produs extends Model
         ];
     }
 
-    public function categorie() { return $this->belongsTo(Categorie::class); }
-    public function unitateMasura() { return $this->belongsTo(UnitateMasura::class); }
-    public function furnizori() { return $this->hasMany(ProdusFurnizor::class); }
-    public function liniiFactura() { return $this->hasMany(FacturaFurnizorLinie::class); }
-    public function miscariStoc() { return $this->hasMany(MiscareStoc::class); }
-    public function solduriStoc() { return $this->hasMany(SoldStoc::class); }
+    public function categorie()
+    {
+        return $this->belongsTo(Categorie::class);
+    }
+
+    public function unitateMasura()
+    {
+        return $this->belongsTo(UnitateMasura::class);
+    }
+
+    public function furnizori()
+    {
+        return $this->hasMany(ProdusFurnizor::class);
+    }
+
+    public function liniiFactura()
+    {
+        return $this->hasMany(FacturaFurnizorLinie::class);
+    }
+
+    public function miscariStoc()
+    {
+        return $this->hasMany(MiscareStoc::class);
+    }
+
+    public function solduriStoc()
+    {
+        return $this->hasMany(SoldStoc::class);
+    }
 }

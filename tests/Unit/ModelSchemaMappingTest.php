@@ -61,4 +61,15 @@ class ModelSchemaMappingTest extends TestCase
     {
         $this->assertSame('decimal:4', (new ProdusFurnizor)->getCasts()['pret_achizitie_ultim']);
     }
+
+    public function test_all_quantity_casts_are_integers(): void
+    {
+        $this->assertSame('integer', (new Produs)->getCasts()['stoc_minim']);
+        $this->assertSame('integer', (new FacturaFurnizorLinie)->getCasts()['cantitate']);
+        $this->assertSame('integer', (new ReceptieLinie)->getCasts()['cantitate']);
+        $this->assertSame('integer', (new MiscareStoc)->getCasts()['cantitate']);
+        $this->assertSame('integer', (new SoldStoc)->getCasts()['cantitate_fizica']);
+        $this->assertSame('integer', (new SoldStoc)->getCasts()['cantitate_rezervata']);
+        $this->assertSame('integer', (new ExportFgoStocLinie)->getCasts()['cantitate']);
+    }
 }

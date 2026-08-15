@@ -1,0 +1,14 @@
+---
+deployment:
+  tasks:
+    - /bin/cp -R app/. /home/piesekym/gestiune/app/
+    - /bin/cp -R bootstrap/. /home/piesekym/gestiune/bootstrap/
+    - /bin/cp -R config/. /home/piesekym/gestiune/config/
+    - /bin/cp -R database/. /home/piesekym/gestiune/database/
+    - /bin/cp -R resources/. /home/piesekym/gestiune/resources/
+    - /bin/cp -R routes/. /home/piesekym/gestiune/routes/
+    - /bin/cp artisan /home/piesekym/gestiune/artisan
+    - /bin/cp composer.json /home/piesekym/gestiune/composer.json
+    - /bin/cp composer.lock /home/piesekym/gestiune/composer.lock
+    - /bin/cp public/index.php /home/piesekym/gestiune/public/index.php
+    - /bin/cp public/robots.txt /home/piesekym/gestiune/public/robots.txt

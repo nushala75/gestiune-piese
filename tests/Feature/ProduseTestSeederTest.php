@@ -59,7 +59,7 @@ class ProduseTestSeederTest extends TestCase
             $table->unsignedBigInteger('categorie_id');
             $table->unsignedBigInteger('unitate_masura_id');
             $table->string('marca')->nullable();
-            $table->decimal('stoc_minim', 18, 3)->default(1);
+            $table->bigInteger('stoc_minim')->default(1);
             $table->decimal('pret_vanzare_fara_tva', 18, 4)->nullable();
             $table->decimal('pret_vanzare_cu_tva', 18, 2)->nullable();
             $table->decimal('cota_tva', 5, 2)->default(21);
@@ -88,8 +88,8 @@ class ProduseTestSeederTest extends TestCase
         Schema::create('solduri_stoc', function (Blueprint $table): void {
             $table->unsignedBigInteger('gestiune_id');
             $table->unsignedBigInteger('produs_id');
-            $table->decimal('cantitate_fizica', 18, 3)->default(0);
-            $table->decimal('cantitate_rezervata', 18, 3)->default(0);
+            $table->bigInteger('cantitate_fizica')->default(0);
+            $table->bigInteger('cantitate_rezervata')->default(0);
             $table->timestamp('updated_at')->nullable();
             $table->primary(['gestiune_id', 'produs_id']);
         });
@@ -128,7 +128,78 @@ class ProduseTestSeederTest extends TestCase
         $this->get('/produse')
             ->assertOk()
             ->assertSee('00445402')
-            ->assertSee('11102-1G87-004 RUB BUSH ENG HANGER')
-            ->assertSee('2,0633');
+            ->assertSee('11102-1G87-004')
+            ->assertSee('value="RUB BUSH ENG HANGER"', false)
+            ->assertSee('2.0633')
+            ->assertSee('name="descriere_romana"', false)
+            ->assertDontSee('Vânzare fără TVA');
+    }
+
+    public function test_product_can_be_edited_directly_and_net_price_is_recalculated(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $produsId = DB::table('produse')->where('cod_fgo', '00445402')->value('id');
+
+        $this->patch("/produse/{$produsId}/editare-rapida", [
+            'denumire_engleza' => 'rub bush updated',
+            'descriere_romana' => 'Bucșă actualizată',
+            'stoc' => 17,
+            'pret_intrare' => '2.1234',
+            'pret_vanzare_cu_tva' => '121.00',
+        ])->assertRedirect();
+
+        $this->assertDatabaseHas('produse', [
+            'id' => $produsId,
+            'denumire_engleza' => 'RUB BUSH UPDATED',
+            'descriere_romana' => 'Bucșă actualizată',
+            'pret_vanzare_fara_tva' => 100.0000,
+            'pret_vanzare_cu_tva' => 121.00,
+        ]);
+        $this->assertDatabaseHas('produse_furnizori', [
+            'produs_id' => $produsId,
+            'pret_achizitie_ultim' => 2.1234,
+        ]);
+        $this->assertDatabaseHas('solduri_stoc', [
+            'produs_id' => $produsId,
+            'cantitate_fizica' => 17,
+        ]);
+    }
+
+    public function test_details_page_excludes_fgo_code_and_updates_remaining_fields(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $produs = DB::table('produse')->where('cod_fgo', '00445402')->first();
+        $categorie = DB::table('categorii')->where('denumire', 'Pe comanda')->first();
+        $unitate = DB::table('unitati_masura')->where('cod', 'SET')->first();
+
+        $this->get("/produse/{$produs->id}/detalii")
+            ->assertOk()
+            ->assertSee('Edit detalii')
+            ->assertDontSee('name="cod_fgo"', false);
+
+        $this->patch("/produse/{$produs->id}/detalii", [
+            'cod_produs' => '11102-1g87-004-x',
+            'categorie_id' => $categorie->id,
+            'unitate_masura_id' => $unitate->id,
+            'marca' => 'kymco test',
+            'stoc_minim' => 3,
+            'cota_tva' => '21.00',
+            'greutate_kg' => '1.250',
+            'voluminos' => 1,
+            'lungime_cm' => '10.50',
+            'latime_cm' => '20.25',
+            'inaltime_cm' => '30.75',
+            'activ' => 1,
+        ])->assertRedirect("/produse/{$produs->id}/detalii");
+
+        $this->assertDatabaseHas('produse', [
+            'id' => $produs->id,
+            'cod_produs' => '11102-1G87-004-X',
+            'categorie_id' => $categorie->id,
+            'unitate_masura_id' => $unitate->id,
+            'marca' => 'KYMCO TEST',
+            'stoc_minim' => 3,
+            'voluminos' => 1,
+        ]);
     }
 }

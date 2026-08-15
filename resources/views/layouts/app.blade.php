@@ -43,11 +43,34 @@
         .search { display:flex; gap:8px; }
         input[type=search] { min-width:300px; border:1px solid #bdcbd7; border-radius:9px; padding:10px 12px; font:inherit; }
         button { border:0; border-radius:9px; padding:10px 16px; background:var(--blue); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
+        input, textarea, select { border:1px solid #bdcbd7; border-radius:8px; padding:8px 9px; background:#fff; color:var(--ink); font:inherit; }
+        textarea { resize:vertical; }
         .table-wrap { overflow:auto; }
         table { width:100%; border-collapse:collapse; white-space:nowrap; }
         th { padding:11px 14px; text-align:left; background:#edf3f8; color:#41566a; font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
         td { padding:12px 14px; border-top:1px solid #e7edf2; vertical-align:top; }
         td.name { white-space:normal; min-width:260px; }
+        .editable-name { min-width:330px; }
+        .editable-name label { display:block; margin-top:8px; }
+        .editable-name label span { display:block; margin-bottom:3px; color:var(--muted); font-size:11px; font-weight:700; text-transform:uppercase; }
+        .editable-name input, .editable-name textarea { width:100%; }
+        td.money input { width:112px; text-align:right; font-variant-numeric:tabular-nums; }
+        td.money small { display:block; margin-top:3px; color:var(--muted); }
+        .number-with-unit { display:flex; align-items:center; gap:6px; }
+        .number-with-unit input { width:90px; }
+        .row-actions { min-width:110px; }
+        .row-actions button { width:100%; }
+        .button-secondary { display:inline-block; margin-top:7px; width:100%; padding:8px 10px; border:1px solid #9eb2c4; border-radius:8px; color:var(--blue); background:#fff; text-align:center; text-decoration:none; font-weight:700; }
+        .form-panel { max-width:900px; padding:22px; }
+        .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; }
+        .form-grid label { display:block; }
+        .form-grid label > span { display:block; margin-bottom:5px; color:#41566a; font-weight:700; }
+        .form-grid input, .form-grid select { width:100%; }
+        .form-check { display:flex !important; align-items:center; gap:9px; padding-top:28px; }
+        .form-check input { width:auto; }
+        .form-check span { margin:0 !important; }
+        .form-actions { display:flex; gap:10px; margin-top:22px; }
+        .form-actions .button-secondary { width:auto; margin:0; padding:9px 16px; }
         code { padding:3px 6px; border-radius:5px; background:#eef3f7; color:#294b69; }
         .pill { display:inline-block; padding:3px 8px; border-radius:999px; font-size:12px; background:var(--sky); color:var(--blue); }
         .stock-positive { color:var(--green); font-weight:800; }
@@ -55,9 +78,11 @@
         .money { text-align:right; font-variant-numeric:tabular-nums; }
         .empty { padding:40px; text-align:center; color:var(--muted); }
         .notice { margin-bottom:20px; padding:14px 16px; border-radius:10px; background:#fff6df; color:#765018; border:1px solid #f2d598; }
+        .notice ul { margin:8px 0 0; }
+        .success { margin-bottom:20px; padding:14px 16px; border-radius:10px; background:#e8f7f1; color:#126148; border:1px solid #abdcca; }
         nav.pagination { padding:16px 20px; border-top:1px solid var(--line); }
         nav.pagination svg { width:18px; }
-        @media (max-width:900px) { .shell{grid-template-columns:1fr}.sidebar{padding:16px}.menu{grid-template-columns:repeat(2,1fr)}.topbar{padding:0 18px}.content{padding:22px 18px}.cards{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.page-head{align-items:stretch;flex-direction:column}.search{width:100%}input[type=search]{min-width:0;flex:1}.company{display:none} }
+        @media (max-width:900px) { .shell{grid-template-columns:1fr}.sidebar{padding:16px}.menu{grid-template-columns:repeat(2,1fr)}.topbar{padding:0 18px}.content{padding:22px 18px}.cards{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.page-head{align-items:stretch;flex-direction:column}.search{width:100%}input[type=search]{min-width:0;flex:1}.company{display:none}.form-grid{grid-template-columns:1fr} }
     </style>
 </head>
 <body>
