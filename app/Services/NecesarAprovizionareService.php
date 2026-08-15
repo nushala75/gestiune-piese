@@ -32,7 +32,7 @@ class NecesarAprovizionareService
             && $produs->furnizori()->where('furnizor_id', $produs->furnizor_comanda_id)->exists();
 
         $actualizari = [
-            'cantitate_de_comandat' => max(1, (int) $produs->cantitate_de_comandat),
+            'cantitate_de_comandat' => max((int) $produs->stoc_minim, (int) $produs->cantitate_de_comandat),
         ];
 
         if (! $furnizorManualValid) {

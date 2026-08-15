@@ -226,11 +226,12 @@ class ProduseTestSeederTest extends TestCase
         ]);
     }
 
-    public function test_reorder_suggestion_starts_at_one_keeps_manual_supplier_and_resets_at_minimum_stock(): void
+    public function test_reorder_suggestion_uses_minimum_keeps_larger_manual_value_and_resets_at_minimum_stock(): void
     {
         app(ProduseTestSeeder::class)->run();
         $produs = DB::table('produse')->where('cod_produs', '11102-1G87-004')->first();
         $initialSupplierId = DB::table('produse_furnizori')->where('produs_id', $produs->id)->value('furnizor_id');
+        DB::table('produse')->where('id', $produs->id)->update(['stoc_minim' => 3]);
 
         $this->patch("/produse/{$produs->id}/editare-rapida", [
             'stoc' => 0,
@@ -239,7 +240,7 @@ class ProduseTestSeederTest extends TestCase
 
         $this->assertDatabaseHas('produse', [
             'id' => $produs->id,
-            'cantitate_de_comandat' => 1,
+            'cantitate_de_comandat' => 3,
             'furnizor_comanda_id' => $initialSupplierId,
             'furnizor_comanda_manual' => 0,
         ]);
@@ -267,12 +268,12 @@ class ProduseTestSeederTest extends TestCase
         $this->patch("/produse/{$produs->id}/editare-rapida", [
             'stoc' => 0,
             'pret_vanzare_cu_tva' => '25.00',
-            'cantitate_de_comandat' => 4,
+            'cantitate_de_comandat' => 5,
             'furnizor_comanda_id' => $manualSupplierId,
         ])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('produse', [
             'id' => $produs->id,
-            'cantitate_de_comandat' => 4,
+            'cantitate_de_comandat' => 5,
             'furnizor_comanda_id' => $manualSupplierId,
             'furnizor_comanda_manual' => 1,
         ]);
@@ -280,7 +281,18 @@ class ProduseTestSeederTest extends TestCase
         $this->patch("/produse/{$produs->id}/editare-rapida", [
             'stoc' => 1,
             'pret_vanzare_cu_tva' => '25.00',
-            'cantitate_de_comandat' => 4,
+            'cantitate_de_comandat' => 5,
+            'furnizor_comanda_id' => $manualSupplierId,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('produse', [
+            'id' => $produs->id,
+            'cantitate_de_comandat' => 5,
+        ]);
+
+        $this->patch("/produse/{$produs->id}/editare-rapida", [
+            'stoc' => 3,
+            'pret_vanzare_cu_tva' => '25.00',
+            'cantitate_de_comandat' => 5,
             'furnizor_comanda_id' => $manualSupplierId,
         ])->assertSessionHasNoErrors();
         $this->assertDatabaseHas('produse', [
