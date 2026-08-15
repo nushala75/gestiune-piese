@@ -4,6 +4,9 @@
 @section('section', 'Facturi furnizori')
 
 @section('content')
+    @if(session('status'))
+        <div class="success">{{ session('status') }}</div>
+    @endif
     @if($errors->any())
         <div class="notice">
             <strong>Corectează pozițiile semnalate înainte de import.</strong>
@@ -72,7 +75,7 @@
                                         <small class="danger">Preț propus {{ $line['proposed_sale_price'] }} RON depășește prețul actual {{ number_format((float) $line['current_sale_price'], 2, '.', '') }} RON. Se va actualiza la recepție.</small>
                                     @endif
                                 @else
-                                    <span class="status-unmapped">Necesită mapare</span>
+                                    <a class="button-secondary" href="{{ route('facturi-furnizori.produs-nou', ['line' => $index]) }}">Produs NOU</a>
                                 @endif
                             </td>
                         </tr>

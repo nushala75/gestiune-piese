@@ -19,6 +19,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Importul PDF MOTO TREND se face in doi pasi: previzualizare/editare, apoi confirmare si salvare.
 - Facturile MOTO TREND au TVA 0 si taxare inversa activa. Produsele au cota TVA 21%.
 - Pentru un produs nou fara pret de vanzare, pretul de vanzare cu TVA propus este pretul de intrare EUR inmultit cu 11,5, rotunjit la 2 zecimale. Produsul ramane inactiv pana cand pretul este verificat sau editat si campul `activ` este bifat.
+- O pozitie nemapata din previzualizarea facturii are actiunea `Produs NOU`. Formularul preia codul, denumirea in engleza, pretul de intrare si pretul de vanzare propus din factura; la salvare aloca `cod_fgo`, creeaza maparea MOTO TREND si poate activa produsul prin campul `activ`.
 - Pentru un produs existent, pretul de intrare se actualizeaza in EUR. Pretul de vanzare ramane neschimbat daca `pret_intrare * 11,5` nu il depaseste; in caz contrar aplicatia avertizeaza si il inlocuieste cu valoarea mai mare la receptie.
 - Importul facturii nu modifica stocul si nu aplica preturile produselor. Cantitatile si preturile se actualizeaza numai la etapa `Receptie`, dupa confirmarea importului SAGA.
 - Egalitatea `Amount = cantitate * pret_unitar_calculat` se verifica in serviciul de import folosind aritmetica zecimala; nu este impusa printr-un CHECK SQL sensibil la rotunjire.

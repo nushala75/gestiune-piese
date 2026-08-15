@@ -2,11 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Categorie;
 use App\Models\FacturaFurnizor;
 use App\Models\FacturaFurnizorLinie;
 use App\Models\Furnizor;
 use App\Models\ImportFisier;
 use App\Models\Produs;
+use App\Models\ProdusFurnizor;
+use App\Models\UnitateMasura;
+use App\Services\CodFgoAllocator;
 use App\Services\MotoTrendInvoiceParser;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -128,6 +132,147 @@ class FacturaFurnizorImportController extends Controller
             'draft' => $draft,
             'produse' => Produs::query()->orderBy('cod_produs')->get(['id', 'cod_produs', 'denumire_engleza']),
         ]);
+    }
+
+    public function newProduct(Request $request, int $line): View|RedirectResponse
+    {
+        $draft = $request->session()->get(self::SESSION_KEY);
+        if (! is_array($draft) || ! isset($draft['invoice']['lines'][$line])) {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Poziția facturii nu mai este disponibilă.']);
+        }
+
+        $invoiceLine = $draft['invoice']['lines'][$line];
+        if (! empty($invoiceLine['product_id'])) {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Poziția este deja mapată la un produs.']);
+        }
+
+        $categorii = Categorie::query()->where('activa', true)->orderBy('denumire')->get();
+        $unitatiMasura = UnitateMasura::query()->where('activa', true)->orderBy('cod')->get();
+        $categorieImplicita = $categorii->firstWhere('denumire', 'Pe comanda');
+        $unitateImplicita = $unitatiMasura->firstWhere('cod', 'BUC');
+
+        if ($categorieImplicita === null || $unitateImplicita === null) {
+            return redirect()->route('facturi-furnizori.preview')->withErrors([
+                'lines' => 'Produsul nou nu poate fi creat: lipsesc categoria activă „Pe comanda” sau unitatea activă „BUC”.',
+            ]);
+        }
+
+        return view('facturi-furnizori.produs-nou', [
+            'draft' => $draft,
+            'lineIndex' => $line,
+            'line' => $invoiceLine,
+            'categorii' => $categorii,
+            'unitatiMasura' => $unitatiMasura,
+            'categorieImplicita' => $categorieImplicita,
+            'unitateImplicita' => $unitateImplicita,
+        ]);
+    }
+
+    public function storeNewProduct(Request $request, int $line, CodFgoAllocator $allocator): RedirectResponse
+    {
+        $draft = $request->session()->get(self::SESSION_KEY);
+        if (! is_array($draft)
+            || ! hash_equals((string) ($draft['token'] ?? ''), (string) $request->input('token'))
+            || ! isset($draft['invoice']['lines'][$line])) {
+            return redirect()->route('facturi-furnizori.index')
+                ->withErrors(['factura_pdf' => 'Previzualizarea a expirat. Încarcă din nou factura.']);
+        }
+
+        $invoiceLine = $draft['invoice']['lines'][$line];
+        if (! empty($invoiceLine['product_id'])) {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Poziția este deja mapată la un produs.']);
+        }
+
+        $data = $request->validate([
+            'token' => ['required', 'uuid'],
+            'cod_produs' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i', Rule::unique('produse', 'cod_produs')],
+            'denumire_engleza' => ['required', 'string', 'max:255'],
+            'descriere_romana' => ['nullable', 'string'],
+            'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
+            'unitate_masura_id' => ['required', Rule::exists('unitati_masura', 'id')->where('activa', true)],
+            'marca' => ['nullable', 'string', 'max:100'],
+            'stoc_minim' => ['required', 'integer', 'min:0'],
+            'pret_intrare' => ['required', 'decimal:0,4', 'min:0'],
+            'pret_vanzare_cu_tva' => ['required', 'decimal:0,2', 'min:0'],
+            'greutate_kg' => ['nullable', 'decimal:0,3', 'min:0'],
+            'voluminos' => ['required', 'boolean'],
+            'lungime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'latime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
+            'activ' => ['required', 'boolean'],
+        ]);
+
+        $pretFaraTva = BigDecimal::of($data['pret_vanzare_cu_tva'])
+            ->dividedBy('1.21', 4, RoundingMode::HalfUp)
+            ->__toString();
+
+        try {
+            $product = DB::transaction(function () use ($allocator, $data, $draft, $invoiceLine, $pretFaraTva): Produs {
+                $supplier = Furnizor::query()->firstOrCreate(
+                    ['cod_fiscal' => $draft['invoice']['supplier_vat']],
+                    [
+                        'denumire' => 'MOTO TREND S.A',
+                        'tara' => 'GR',
+                        'moneda_implicita' => 'EUR',
+                        'configuratie_parser' => ['format' => 'moto_trend_pdf_v1'],
+                        'activ' => true,
+                    ],
+                );
+
+                $product = Produs::query()->create([
+                    'cod_fgo' => $allocator->aloca(),
+                    'cod_produs' => mb_strtoupper(trim($data['cod_produs'])),
+                    'denumire_engleza' => mb_strtoupper(trim($data['denumire_engleza'])),
+                    'descriere_romana' => filled($data['descriere_romana'] ?? null) ? trim($data['descriere_romana']) : null,
+                    'categorie_id' => $data['categorie_id'],
+                    'unitate_masura_id' => $data['unitate_masura_id'],
+                    'marca' => filled($data['marca'] ?? null) ? mb_strtoupper(trim($data['marca'])) : null,
+                    'stoc_minim' => $data['stoc_minim'],
+                    'pret_vanzare_fara_tva' => $pretFaraTva,
+                    'pret_vanzare_cu_tva' => $data['pret_vanzare_cu_tva'],
+                    'cota_tva' => '21.00',
+                    'greutate_kg' => $data['greutate_kg'] ?? null,
+                    'voluminos' => $data['voluminos'],
+                    'lungime_cm' => $data['lungime_cm'] ?? null,
+                    'latime_cm' => $data['latime_cm'] ?? null,
+                    'inaltime_cm' => $data['inaltime_cm'] ?? null,
+                    'activ' => $data['activ'],
+                    'sursa' => 'factura_moto_trend',
+                ]);
+
+                ProdusFurnizor::query()->create([
+                    'produs_id' => $product->id,
+                    'furnizor_id' => $supplier->id,
+                    'cod_furnizor' => mb_strtoupper(trim((string) $invoiceLine['supplier_code'])),
+                    'denumire_furnizor' => trim((string) $invoiceLine['description']),
+                    'pret_achizitie_ultim' => $data['pret_intrare'],
+                    'moneda' => $draft['invoice']['currency'],
+                    'data_ultimei_achizitii' => $draft['invoice']['invoice_date'],
+                    'confirmata_manual' => true,
+                ]);
+
+                return $product;
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->withErrors([
+                'produs' => 'Produsul nu a putut fi salvat: '.$exception->getMessage(),
+            ]);
+        }
+
+        $draft['invoice']['lines'][$line]['product_id'] = $product->id;
+        $draft['invoice']['lines'][$line]['product_label'] = $product->cod_produs.' '.$product->denumire_engleza;
+        $draft['invoice']['lines'][$line]['current_sale_price'] = $product->pret_vanzare_cu_tva;
+        $draft['invoice']['lines'][$line]['proposed_sale_price'] = $product->pret_vanzare_cu_tva;
+        $draft['invoice']['lines'][$line]['price_warning'] = false;
+        $request->session()->put(self::SESSION_KEY, $draft);
+
+        return redirect()->route('facturi-furnizori.preview')
+            ->with('status', "Produsul {$product->cod_produs} a fost creat și mapat pe poziția ".($line + 1).'.');
     }
 
     public function store(Request $request): RedirectResponse

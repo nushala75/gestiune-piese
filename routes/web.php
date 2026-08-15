@@ -13,5 +13,11 @@ Route::patch('/produse/{produs}/detalii', [ProdusController::class, 'updateDetal
 Route::get('/facturi-furnizori', [FacturaFurnizorImportController::class, 'index'])->name('facturi-furnizori.index');
 Route::post('/facturi-furnizori/incarcare', [FacturaFurnizorImportController::class, 'upload'])->name('facturi-furnizori.upload');
 Route::get('/facturi-furnizori/previzualizare', [FacturaFurnizorImportController::class, 'preview'])->name('facturi-furnizori.preview');
+Route::get('/facturi-furnizori/previzualizare/produs-nou/{line}', [FacturaFurnizorImportController::class, 'newProduct'])
+    ->whereNumber('line')
+    ->name('facturi-furnizori.produs-nou');
+Route::post('/facturi-furnizori/previzualizare/produs-nou/{line}', [FacturaFurnizorImportController::class, 'storeNewProduct'])
+    ->whereNumber('line')
+    ->name('facturi-furnizori.produs-nou.store');
 Route::post('/facturi-furnizori/import', [FacturaFurnizorImportController::class, 'store'])->name('facturi-furnizori.store');
 Route::post('/facturi-furnizori/anulare', [FacturaFurnizorImportController::class, 'cancel'])->name('facturi-furnizori.cancel');

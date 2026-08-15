@@ -25,7 +25,7 @@ class FacturaFurnizorImportTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (['facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme'] as $table) {
+        foreach (['facturi_furnizor_linii', 'facturi_furnizor', 'importuri_fisiere', 'solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme', 'secvente_cod_fgo'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -124,6 +124,71 @@ class FacturaFurnizorImportTest extends TestCase
         ])->assertRedirect()->assertSessionHasErrors('factura_pdf');
     }
 
+    public function test_unmapped_invoice_line_can_create_and_activate_a_new_product(): void
+    {
+        Storage::fake('local');
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $lineIndex = collect($draft['invoice']['lines'])
+            ->search(fn (array $line): bool => empty($line['product_id']));
+        $this->assertIsInt($lineIndex);
+        $line = $draft['invoice']['lines'][$lineIndex];
+
+        $this->get('/facturi-furnizori/previzualizare')
+            ->assertOk()
+            ->assertSee('Produs NOU');
+
+        $this->get("/facturi-furnizori/previzualizare/produs-nou/{$lineIndex}")
+            ->assertOk()
+            ->assertSee($line['supplier_code'])
+            ->assertSee($line['description'])
+            ->assertSee($line['proposed_sale_price'])
+            ->assertSee('preț intrare × 11,5');
+
+        $categoryId = DB::table('categorii')->where('denumire', 'Pe comanda')->value('id');
+        $unitId = DB::table('unitati_masura')->where('cod', 'BUC')->value('id');
+
+        $this->post("/facturi-furnizori/previzualizare/produs-nou/{$lineIndex}", [
+            'token' => $draft['token'],
+            'cod_produs' => $line['supplier_code'],
+            'denumire_engleza' => $line['description'],
+            'descriere_romana' => 'Produs creat din factura',
+            'categorie_id' => $categoryId,
+            'unitate_masura_id' => $unitId,
+            'marca' => 'KYMCO',
+            'stoc_minim' => 1,
+            'pret_intrare' => $line['unit_price'],
+            'pret_vanzare_cu_tva' => $line['proposed_sale_price'],
+            'greutate_kg' => null,
+            'voluminos' => 0,
+            'lungime_cm' => null,
+            'latime_cm' => null,
+            'inaltime_cm' => null,
+            'activ' => 1,
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $productId = DB::table('produse')->where('cod_produs', $line['supplier_code'])->value('id');
+        $this->assertNotNull($productId);
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'cod_fgo' => '01000000',
+            'pret_vanzare_cu_tva' => $line['proposed_sale_price'],
+            'cota_tva' => 21,
+            'activ' => 1,
+            'sursa' => 'factura_moto_trend',
+        ]);
+        $this->assertDatabaseHas('produse_furnizori', [
+            'produs_id' => $productId,
+            'cod_furnizor' => $line['supplier_code'],
+            'pret_achizitie_ultim' => $line['unit_price'],
+            'moneda' => 'EUR',
+        ]);
+        $this->assertSame($productId, session('factura_furnizor_import_preview')['invoice']['lines'][$lineIndex]['product_id']);
+    }
+
     private function invoicePath(): string
     {
         return glob(base_path('facturi-furnizori/MOTO-TREND/*.pdf'))[0];
@@ -131,6 +196,19 @@ class FacturaFurnizorImportTest extends TestCase
 
     private function createProductTables(): void
     {
+        Schema::create('secvente_cod_fgo', function (Blueprint $table): void {
+            $table->unsignedBigInteger('id')->primary();
+            $table->unsignedBigInteger('urmatorul_cod');
+            $table->unsignedBigInteger('cod_minim');
+            $table->unsignedBigInteger('cod_maxim');
+        });
+        DB::table('secvente_cod_fgo')->insert([
+            'id' => 1,
+            'urmatorul_cod' => 1000000,
+            'cod_minim' => 1000000,
+            'cod_maxim' => 8999999,
+        ]);
+
         Schema::create('firme', function (Blueprint $table): void {
             $table->id();
             $table->string('denumire');
