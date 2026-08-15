@@ -385,6 +385,10 @@ class FacturaFurnizorImportController extends Controller
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['factura' => 'Într-o factură storno nu se pot crea produse noi.']);
         }
+        if ($linie->tip_linie === 'cost') {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Pozițiile de cost nu se mapează la produse.']);
+        }
         if ($linie->factura_id !== $factura->id || $linie->produs_id !== null || $factura->status !== 'import_partial') {
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['factura' => 'Poziția nu este disponibilă pentru crearea unui produs nou.']);
@@ -428,6 +432,10 @@ class FacturaFurnizorImportController extends Controller
         if ($factura->tip_document === 'storno') {
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['factura' => 'Într-o factură storno nu se pot crea produse noi.']);
+        }
+        if ($linie->tip_linie === 'cost') {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Pozițiile de cost nu se mapează la produse.']);
         }
         if ($linie->factura_id !== $factura->id
             || $linie->produs_id !== null
@@ -533,6 +541,9 @@ class FacturaFurnizorImportController extends Controller
         $factura->load('linii');
         DB::transaction(function () use ($data, $factura): void {
             foreach ($factura->linii as $line) {
+                if ($line->tip_linie === 'cost') {
+                    continue;
+                }
                 $productId = $data['lines'][$line->id]['product_id'] ?? null;
                 $line->update([
                     'produs_id' => $productId,
@@ -567,7 +578,7 @@ class FacturaFurnizorImportController extends Controller
         if ($factura->receptie()->exists()) {
             return back()->withErrors(['factura' => 'Importul nu mai poate fi modificat după crearea recepției.']);
         }
-        if ($factura->linii()->whereNull('produs_id')->exists()) {
+        if ($factura->linii()->where('tip_linie', 'produs')->whereNull('produs_id')->exists()) {
             return back()->withErrors(['factura' => 'Importul nu poate fi finalizat: există poziții fără produs mapat.']);
         }
 
@@ -686,7 +697,10 @@ class FacturaFurnizorImportController extends Controller
                     ],
                 ]);
 
-                $hasUnmapped = collect($validated['lines'])->contains(fn (array $line): bool => empty($line['product_id']));
+                $hasUnmapped = collect($validated['lines'])->contains(
+                    fn (array $line, int $index): bool => ($invoice['lines'][$index]['tip_linie'] ?? 'produs') === 'produs'
+                        && empty($line['product_id'])
+                );
                 $factura = FacturaFurnizor::query()->create([
                     'furnizor_id' => $supplier->id,
                     'import_fisier_id' => $import->id,
@@ -704,11 +718,12 @@ class FacturaFurnizorImportController extends Controller
                 ]);
 
                 foreach (array_values($validated['lines']) as $index => $line) {
+                    $tipLinie = ($invoice['lines'][$index]['tip_linie'] ?? 'produs') === 'cost' ? 'cost' : 'produs';
                     $unitPrice = BigDecimal::of($line['amount'])
                         ->dividedBy((int) $line['quantity'], 4, RoundingMode::HalfUp)
                         ->__toString();
                     $priceObservation = null;
-                    if ($line['product_id'] && ($draft['tip_document'] ?? 'factura') !== 'storno') {
+                    if ($tipLinie === 'produs' && $line['product_id'] && ($draft['tip_document'] ?? 'factura') !== 'storno') {
                         $product = Produs::query()->findOrFail($line['product_id']);
                         $proposedSalePrice = BigDecimal::of($unitPrice)
                             ->multipliedBy(self::SALE_PRICE_MULTIPLIER)
@@ -721,7 +736,8 @@ class FacturaFurnizorImportController extends Controller
                     FacturaFurnizorLinie::query()->create([
                         'factura_id' => $factura->id,
                         'numar_linie' => $index + 1,
-                        'produs_id' => $line['product_id'] ?: null,
+                        'tip_linie' => $tipLinie,
+                        'produs_id' => $tipLinie === 'produs' ? ($line['product_id'] ?: null) : null,
                         'cod_furnizor' => mb_strtoupper(trim($line['supplier_code'])),
                         'descriere_originala' => trim($line['description']),
                         'cantitate' => (int) $line['quantity'],
@@ -730,10 +746,10 @@ class FacturaFurnizorImportController extends Controller
                         'pret_unitar_calculat' => $unitPrice,
                         'cota_tva' => '0.00',
                         'valoare_tva' => '0.00',
-                        'status_mapare' => $line['product_id'] ? 'mapat' : 'necesita_mapare',
-                        'observatii' => $line['product_id'] ? $priceObservation : (($draft['tip_document'] ?? 'factura') === 'storno'
+                        'status_mapare' => $tipLinie === 'cost' ? 'cost' : ($line['product_id'] ? 'mapat' : 'necesita_mapare'),
+                        'observatii' => $tipLinie === 'cost' ? 'Poziție de cost fără mișcare de stoc.' : ($line['product_id'] ? $priceObservation : (($draft['tip_document'] ?? 'factura') === 'storno'
                             ? 'Selectează un produs existent, deja mapat la furnizor.'
-                            : 'Produsul necesită mapare manuală.'),
+                            : 'Produsul necesită mapare manuală.')),
                     ]);
                 }
 

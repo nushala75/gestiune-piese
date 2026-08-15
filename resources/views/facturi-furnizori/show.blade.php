@@ -30,22 +30,28 @@
                     <thead><tr><th>#</th><th>Cod furnizor</th><th>Descriere</th><th>Cantitate</th><th>Preț intrare</th><th>Produs local</th><th>Stare</th></tr></thead>
                     <tbody>
                     @foreach($factura->linii as $line)
-                        <tr @class(['row-warning' => !$line->produs_id])>
+                        <tr @class(['row-warning' => $line->tip_linie === 'produs' && !$line->produs_id])>
                             <td>{{ $line->numar_linie }}</td>
                             <td><strong>{{ $line->cod_furnizor }}</strong></td>
                             <td>{{ $line->descriere_originala }}</td>
                             <td>{{ $line->cantitate }}</td>
                             <td class="money"><strong>{{ number_format((float) $line->pret_unitar_calculat, 4, '.', '') }}</strong><small>{{ $factura->moneda }}</small></td>
                             <td>
-                                <select class="product-select" name="lines[{{ $line->id }}][product_id]" @disabled($factura->status !== 'import_partial' || $factura->receptie)>
-                                    <option value="">Nemapat</option>
-                                    @foreach($produse as $produs)
-                                        <option value="{{ $produs->id }}" @selected((int) old("lines.{$line->id}.product_id", $line->produs_id) === $produs->id)>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</option>
-                                    @endforeach
-                                </select>
+                                @if($line->tip_linie === 'cost')
+                                    <span class="pill">Cost fără stoc</span>
+                                @else
+                                    <select class="product-select" name="lines[{{ $line->id }}][product_id]" @disabled($factura->status !== 'import_partial' || $factura->receptie)>
+                                        <option value="">Nemapat</option>
+                                        @foreach($produse as $produs)
+                                            <option value="{{ $produs->id }}" @selected((int) old("lines.{$line->id}.product_id", $line->produs_id) === $produs->id)>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
                             </td>
                             <td>
-                                @if($line->produs_id)
+                                @if($line->tip_linie === 'cost')
+                                    <span class="status-mapped">Cost</span>
+                                @elseif($line->produs_id)
                                     <span class="status-mapped">Mapat</span>
                                 @elseif($factura->tip_document !== 'storno')
                                     <a class="button-secondary" href="{{ route('facturi-furnizori.importat.produs-nou', ['factura' => $factura, 'linie' => $line]) }}">Produs NOU</a>

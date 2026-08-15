@@ -48,7 +48,8 @@
                     @foreach($draft['invoice']['lines'] as $index => $line)
                         @php
                             $selectedProduct = old("lines.$index.product_id", $line['product_id']);
-                            $needsReview = !$line['valid'] || !$selectedProduct;
+                            $isCost = ($line['tip_linie'] ?? 'produs') === 'cost';
+                            $needsReview = !$line['valid'] || (!$isCost && !$selectedProduct);
                         @endphp
                         <tr @class(['row-warning' => $needsReview])>
                             <td>{{ $index + 1 }}</td>
@@ -61,15 +62,21 @@
                             <td><input class="amount-input" type="number" min="0.01" step="0.01" name="lines[{{ $index }}][amount]" value="{{ old("lines.$index.amount", $line['amount']) }}" required></td>
                             <td class="money"><strong>{{ $line['unit_price'] ?: '—' }}</strong><small>EUR</small></td>
                             <td>
-                                <select class="product-select" name="lines[{{ $index }}][product_id]">
-                                    <option value="">Nemapat — va necesita mapare</option>
-                                    @foreach($produse as $produs)
-                                        <option value="{{ $produs->id }}" @selected((string) $selectedProduct === (string) $produs->id)>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</option>
-                                    @endforeach
-                                </select>
+                                @if($isCost)
+                                    <span class="pill">Cost fără stoc</span>
+                                @else
+                                    <select class="product-select" name="lines[{{ $index }}][product_id]">
+                                        <option value="">Nemapat — va necesita mapare</option>
+                                        @foreach($produse as $produs)
+                                            <option value="{{ $produs->id }}" @selected((string) $selectedProduct === (string) $produs->id)>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</option>
+                                        @endforeach
+                                    </select>
+                                @endif
                             </td>
                             <td>
-                                @if($selectedProduct)
+                                @if($isCost)
+                                    <span class="status-mapped">Cost</span>
+                                @elseif($selectedProduct)
                                     <span class="status-mapped">Mapat</span>
                                     @if($line['price_warning'])
                                         <div class="price-confirm-inline">

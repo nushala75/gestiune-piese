@@ -33,7 +33,8 @@ class ReceptieController extends Controller
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['receptie' => 'Finalizează mai întâi importul și maparea tuturor produselor.']);
         }
-        if ($factura->linii->contains(fn ($linie): bool => $linie->produs_id === null)) {
+        $liniiProduse = $factura->linii->where('tip_linie', 'produs');
+        if ($liniiProduse->isEmpty() || $liniiProduse->contains(fn ($linie): bool => $linie->produs_id === null)) {
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['receptie' => 'Recepția integrală nu poate fi creată: există poziții fără produs mapat.']);
         }
@@ -41,7 +42,7 @@ class ReceptieController extends Controller
         $gestiune = $this->gestiuneFirma();
         $avertismenteStoc = collect();
         if ($factura->tip_document === 'storno') {
-            $cantitatiPeProdus = $factura->linii
+            $cantitatiPeProdus = $liniiProduse
                 ->groupBy('produs_id')
                 ->map(fn ($linii): int => (int) $linii->sum('cantitate'));
             $solduri = DB::table('solduri_stoc')
@@ -50,14 +51,14 @@ class ReceptieController extends Controller
                 ->pluck('cantitate_fizica', 'produs_id');
 
             $avertismenteStoc = $cantitatiPeProdus
-                ->map(function (int $cantitate, int|string $produsId) use ($factura, $solduri): ?array {
+                ->map(function (int $cantitate, int|string $produsId) use ($liniiProduse, $solduri): ?array {
                     $stocCurent = (int) ($solduri[$produsId] ?? 0);
                     $stocDupa = $stocCurent - $cantitate;
                     if ($stocDupa >= 0) {
                         return null;
                     }
 
-                    $produs = $factura->linii->firstWhere('produs_id', (int) $produsId)?->produs;
+                    $produs = $liniiProduse->firstWhere('produs_id', (int) $produsId)?->produs;
 
                     return [
                         'produs' => $produs?->cod_produs.' '.$produs?->denumire_engleza,
@@ -98,7 +99,8 @@ class ReceptieController extends Controller
                     'receptie' => 'Recepția poate fi făcută numai după finalizarea importului.',
                 ]);
             }
-            if ($facturaBlocata->linii->isEmpty() || $facturaBlocata->linii->contains(fn ($linie): bool => $linie->produs_id === null)) {
+            $liniiProduse = $facturaBlocata->linii->where('tip_linie', 'produs');
+            if ($liniiProduse->isEmpty() || $liniiProduse->contains(fn ($linie): bool => $linie->produs_id === null)) {
                 throw ValidationException::withMessages([
                     'receptie' => 'Recepția integrală necesită cel puțin o poziție și toate produsele mapate.',
                 ]);
@@ -113,7 +115,7 @@ class ReceptieController extends Controller
                 'status' => 'finalizata',
             ]);
 
-            foreach ($facturaBlocata->linii as $linieFactura) {
+            foreach ($liniiProduse as $linieFactura) {
                 $costUnitar = BigDecimal::of($linieFactura->pret_unitar_calculat)
                     ->toScale(4, RoundingMode::HalfUp)
                     ->__toString();
@@ -182,7 +184,7 @@ class ReceptieController extends Controller
             }
 
             Produs::query()
-                ->whereIn('id', $facturaBlocata->linii->pluck('produs_id')->unique())
+                ->whereIn('id', $liniiProduse->pluck('produs_id')->unique())
                 ->get()
                 ->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
         });

@@ -7,7 +7,7 @@
     <div class="page-head">
         <div>
             <h1>{{ $factura->tip_document === 'storno' ? 'Recepție storno' : 'Recepție' }} {{ $factura->numar_original }}</h1>
-            <p class="lead">{{ $factura->furnizor->denumire }} · {{ $factura->linii->count() }} poziții · {{ $factura->linii->sum('cantitate') }} bucăți</p>
+            <p class="lead">{{ $factura->furnizor->denumire }} · {{ $factura->linii->where('tip_linie', 'produs')->count() }} produse · {{ $factura->linii->where('tip_linie', 'produs')->sum('cantitate') }} bucăți</p>
         </div>
         <span class="pill">Gestiune FIRMA</span>
     </div>
@@ -49,8 +49,14 @@
                     <tr>
                         <td>{{ $linie->numar_linie }}</td>
                         <td><strong>{{ $linie->cod_furnizor }}</strong></td>
-                        <td class="name"><strong>{{ $linie->produs->cod_produs }}</strong><br><small>{{ $linie->descriere_originala }}</small></td>
-                        <td>{{ $linie->cantitate }}</td>
+                        <td class="name">
+                            @if($linie->tip_linie === 'cost')
+                                <strong>Cost fără stoc</strong><br><small>{{ $linie->descriere_originala }}</small>
+                            @else
+                                <strong>{{ $linie->produs->cod_produs }}</strong><br><small>{{ $linie->descriere_originala }}</small>
+                            @endif
+                        </td>
+                        <td>{{ $linie->tip_linie === 'cost' ? '—' : $linie->cantitate }}</td>
                         <td class="money">{{ number_format((float) $linie->pret_unitar_calculat, 4, '.', '') }} {{ $factura->moneda }}</td>
                         <td class="money">{{ number_format((float) $linie->amount_sursa, 2, ',', '.') }} {{ $factura->moneda }}</td>
                     </tr>

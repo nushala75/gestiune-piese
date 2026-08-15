@@ -450,6 +450,56 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertDatabaseCount('receptii', 0);
     }
 
+    public function test_cost_line_is_kept_on_invoice_and_excluded_from_stock(): void
+    {
+        $factura = $this->importInvoice();
+        $costLine = DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->orderBy('numar_linie')
+            ->first();
+        DB::table('facturi_furnizor_linii')->where('id', $costLine->id)->update([
+            'tip_linie' => 'cost',
+            'produs_id' => null,
+            'status_mapare' => 'cost',
+            'observatii' => 'Poziție de cost fără mișcare de stoc.',
+        ]);
+        $productId = (int) DB::table('produse')->value('id');
+        $gestiuneId = (int) DB::table('gestiuni')->where('cod', 'FIRMA')->value('id');
+        $initialStock = (int) DB::table('solduri_stoc')
+            ->where('gestiune_id', $gestiuneId)
+            ->where('produs_id', $productId)
+            ->value('cantitate_fizica');
+        $productQuantity = (int) DB::table('facturi_furnizor_linii')
+            ->where('factura_id', $factura->id)
+            ->where('tip_linie', 'produs')
+            ->sum('cantitate');
+
+        $this->mapAllLinesAndFinalize($factura, $productId);
+        $this->get("/facturi-furnizori/{$factura->id}")
+            ->assertOk()
+            ->assertSee('Cost fără stoc');
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+            'confirmare_saga' => '1',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('facturi_furnizor_linii', [
+            'id' => $costLine->id,
+            'tip_linie' => 'cost',
+            'produs_id' => null,
+        ]);
+        $this->assertDatabaseCount('receptii_linii', 46);
+        $this->assertDatabaseCount('miscari_stoc', 46);
+        $this->assertSame($productQuantity, (int) DB::table('miscari_stoc')->sum('cantitate'));
+        $this->assertSame(
+            $initialStock + $productQuantity,
+            (int) DB::table('solduri_stoc')
+                ->where('gestiune_id', $gestiuneId)
+                ->where('produs_id', $productId)
+                ->value('cantitate_fizica')
+        );
+    }
+
     public function test_storno_uses_existing_supplier_mappings_and_creates_negative_stock_movements(): void
     {
         Storage::fake('local');
@@ -796,6 +846,7 @@ class FacturaFurnizorImportTest extends TestCase
             $table->id();
             $table->unsignedBigInteger('factura_id');
             $table->unsignedInteger('numar_linie');
+            $table->string('tip_linie', 16)->default('produs');
             $table->unsignedBigInteger('produs_id')->nullable();
             $table->string('cod_furnizor', 100);
             $table->string('descriere_originala', 500);
