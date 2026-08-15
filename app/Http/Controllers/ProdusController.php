@@ -6,6 +6,7 @@ use App\Models\Categorie;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Models\UnitateMasura;
+use App\Services\CodFgoAllocator;
 use App\Services\NecesarAprovizionareService;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -19,6 +20,80 @@ use Illuminate\Validation\Rule;
 
 class ProdusController extends Controller
 {
+    public function create(): View
+    {
+        return view('produse.create', [
+            'categorii' => Categorie::query()->where('activa', true)->orderBy('denumire')->get(),
+            'unitatiMasura' => UnitateMasura::query()->where('activa', true)->orderBy('cod')->get(),
+            'categorieImplicita' => Categorie::query()->where('denumire', 'Pe comanda')->value('id'),
+        ]);
+    }
+
+    public function store(Request $request, CodFgoAllocator $codFgoAllocator, NecesarAprovizionareService $necesarAprovizionare): RedirectResponse
+    {
+        $date = $request->validate([
+            'cod_produs' => ['required', 'string', 'max:64'],
+            'denumire_engleza' => ['required', 'string', 'max:255'],
+            'descriere_romana' => ['nullable', 'required_if:activ,1', 'string'],
+            'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
+            'unitate_masura_id' => ['required', Rule::exists('unitati_masura', 'id')->where('activa', true)],
+            'marca' => ['nullable', 'string', 'max:100'],
+            'stoc_minim' => ['required', 'integer', 'min:0'],
+            'stoc' => ['required', 'integer', 'min:0'],
+            'pret_vanzare_cu_tva' => ['nullable', 'required_if:activ,1', 'decimal:0,2', 'min:0'],
+            'activ' => ['required', 'boolean'],
+        ], [
+            'denumire_engleza.required' => 'Description of Goods este obligatorie pentru salvarea produsului.',
+            'descriere_romana.required_if' => 'Descrierea în română este obligatorie pentru activarea produsului.',
+            'pret_vanzare_cu_tva.required_if' => 'Prețul de vânzare cu TVA este obligatoriu pentru activarea produsului.',
+        ]);
+
+        $gestiune = Gestiune::query()
+            ->where('cod', 'FIRMA')
+            ->whereHas('firma', fn (Builder $query) => $query->where('cod_fiscal', 'RO20548513'))
+            ->sole();
+        $pretCuTva = filled($date['pret_vanzare_cu_tva'] ?? null) ? $date['pret_vanzare_cu_tva'] : null;
+        $pretFaraTva = $pretCuTva === null
+            ? null
+            : BigDecimal::of($pretCuTva)->dividedBy('1.21', 4, RoundingMode::HalfUp)->__toString();
+
+        $produs = DB::transaction(function () use ($codFgoAllocator, $date, $gestiune, $necesarAprovizionare, $pretCuTva, $pretFaraTva): Produs {
+            $produs = Produs::query()->create([
+                'cod_fgo' => $codFgoAllocator->aloca(),
+                'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
+                'denumire_engleza' => mb_strtoupper(trim($date['denumire_engleza'])),
+                'descriere_romana' => filled($date['descriere_romana'] ?? null) ? trim($date['descriere_romana']) : null,
+                'categorie_id' => $date['categorie_id'],
+                'unitate_masura_id' => $date['unitate_masura_id'],
+                'marca' => filled($date['marca'] ?? null) ? mb_strtoupper(trim($date['marca'])) : 'KYMCO',
+                'stoc_minim' => $date['stoc_minim'],
+                'cantitate_de_comandat' => 0,
+                'furnizor_comanda_id' => null,
+                'furnizor_comanda_manual' => false,
+                'pret_vanzare_fara_tva' => $pretFaraTva,
+                'pret_vanzare_cu_tva' => $pretCuTva,
+                'cota_tva' => '21.00',
+                'voluminos' => false,
+                'activ' => $date['activ'],
+                'sursa' => 'manual',
+            ]);
+
+            DB::table('solduri_stoc')->insert([
+                'gestiune_id' => $gestiune->id,
+                'produs_id' => $produs->id,
+                'cantitate_fizica' => $date['stoc'],
+                'cantitate_rezervata' => 0,
+                'updated_at' => now(),
+            ]);
+            $necesarAprovizionare->sincronizeaza($produs, $gestiune);
+
+            return $produs;
+        });
+
+        return redirect()->route('produse.edit-detalii', $produs)
+            ->with('status', "Produsul {$produs->cod_produs} a fost adăugat cu codul FGO {$produs->cod_fgo}.");
+    }
+
     public function index(Request $request): View
     {
         $cautare = trim((string) $request->query('q', ''));

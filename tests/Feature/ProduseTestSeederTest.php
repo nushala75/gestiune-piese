@@ -50,6 +50,12 @@ class ProduseTestSeederTest extends TestCase
             $table->boolean('activ')->default(true);
             $table->timestamps();
         });
+        Schema::create('secvente_cod_fgo', function (Blueprint $table): void {
+            $table->unsignedTinyInteger('id')->primary();
+            $table->unsignedBigInteger('urmatorul_cod');
+            $table->unsignedBigInteger('cod_minim');
+            $table->unsignedBigInteger('cod_maxim');
+        });
         Schema::create('produse', function (Blueprint $table): void {
             $table->id();
             $table->char('cod_fgo', 8)->nullable()->unique();
@@ -96,11 +102,17 @@ class ProduseTestSeederTest extends TestCase
             $table->timestamp('updated_at')->nullable();
             $table->primary(['gestiune_id', 'produs_id']);
         });
+        DB::table('secvente_cod_fgo')->insert([
+            'id' => 1,
+            'urmatorul_cod' => 1000000,
+            'cod_minim' => 1000000,
+            'cod_maxim' => 8999999,
+        ]);
     }
 
     protected function tearDown(): void
     {
-        foreach (['solduri_stoc', 'produse_furnizori', 'produse', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme'] as $table) {
+        foreach (['solduri_stoc', 'produse_furnizori', 'produse', 'secvente_cod_fgo', 'furnizori', 'unitati_masura', 'categorii', 'gestiuni', 'firme'] as $table) {
             Schema::dropIfExists($table);
         }
 
@@ -143,6 +155,75 @@ class ProduseTestSeederTest extends TestCase
             ->assertDontSee('name="descriere_romana"', false)
             ->assertDontSee('name="pret_intrare"', false)
             ->assertDontSee('Vânzare fără TVA');
+    }
+
+    public function test_manual_product_gets_fgo_automatically_and_activation_requires_complete_data(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $categoryId = DB::table('categorii')->where('denumire', 'Pe comanda')->value('id');
+        $unitId = DB::table('unitati_masura')->where('cod', 'BUC')->value('id');
+
+        $this->get('/produse')
+            ->assertOk()
+            ->assertSee('Adaugă produs')
+            ->assertSee('name="categorie" onchange="this.form.submit()"', false);
+        $this->get('/produse/adauga')
+            ->assertOk()
+            ->assertSee('Codul FGO va fi alocat automat');
+
+        $this->post('/produse', [
+            'cod_produs' => 'manual-test-1',
+            'denumire_engleza' => 'manual inactive product',
+            'descriere_romana' => '',
+            'categorie_id' => $categoryId,
+            'unitate_masura_id' => $unitId,
+            'marca' => 'kymco',
+            'stoc_minim' => 1,
+            'stoc' => 0,
+            'pret_vanzare_cu_tva' => '',
+            'activ' => 0,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('produse', [
+            'cod_fgo' => '01000000',
+            'cod_produs' => 'MANUAL-TEST-1',
+            'denumire_engleza' => 'MANUAL INACTIVE PRODUCT',
+            'descriere_romana' => null,
+            'pret_vanzare_cu_tva' => null,
+            'activ' => 0,
+        ]);
+
+        $this->post('/produse', [
+            'cod_produs' => 'manual-test-2',
+            'denumire_engleza' => 'manual active product',
+            'descriere_romana' => '',
+            'categorie_id' => $categoryId,
+            'unitate_masura_id' => $unitId,
+            'stoc_minim' => 1,
+            'stoc' => 0,
+            'pret_vanzare_cu_tva' => '',
+            'activ' => 1,
+        ])->assertSessionHasErrors(['descriere_romana', 'pret_vanzare_cu_tva']);
+
+        $this->post('/produse', [
+            'cod_produs' => 'manual-test-2',
+            'denumire_engleza' => 'manual active product',
+            'descriere_romana' => 'Produs activ creat manual',
+            'categorie_id' => $categoryId,
+            'unitate_masura_id' => $unitId,
+            'stoc_minim' => 1,
+            'stoc' => 2,
+            'pret_vanzare_cu_tva' => '121.00',
+            'activ' => 1,
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('produse', [
+            'cod_fgo' => '01000001',
+            'cod_produs' => 'MANUAL-TEST-2',
+            'descriere_romana' => 'Produs activ creat manual',
+            'pret_vanzare_fara_tva' => 100.0000,
+            'pret_vanzare_cu_tva' => 121.00,
+            'cota_tva' => 21.00,
+            'activ' => 1,
+        ]);
     }
 
     public function test_reorder_suggestion_starts_at_one_keeps_manual_supplier_and_resets_at_minimum_stock(): void
@@ -219,6 +300,7 @@ class ProduseTestSeederTest extends TestCase
             ->assertOk()
             ->assertSee('12100-KHE7-900 CYLINDER COMP')
             ->assertDontSee('11102-1G87-004 RUB BUSH ENG HANGER')
+            ->assertSee('name="categorie" onchange="this.form.submit()"', false)
             ->assertSee('value="pozitiv" selected', false);
 
         $this->get('/produse?stoc=zero')

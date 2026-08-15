@@ -21,6 +21,7 @@
             <h1>Produse</h1>
             <p class="lead">Catalogul local cu maparea FGO, prețuri și stoc.</p>
         </div>
+        <a class="button-secondary page-action" href="{{ route('produse.create') }}">Adaugă produs</a>
     </div>
 
     <form class="product-filters" method="get" action="{{ route('produse.index') }}">
@@ -30,7 +31,7 @@
         </label>
         <label>
             <span>Categorie</span>
-            <select name="categorie">
+            <select name="categorie" onchange="this.form.submit()">
                 <option value="">Toate categoriile</option>
                 @foreach($categorii as $categorie)
                     <option value="{{ $categorie->id }}" @selected($categorieSelectata === $categorie->id)>{{ $categorie->denumire }}</option>

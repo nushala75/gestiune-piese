@@ -36,6 +36,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Transportul, ambalarea si alte servicii identificate de parser se pastreaza ca linii de factura cu `tip_linie = cost`. Acestea intra in totalul documentului, nu necesita mapare la produs si nu creeaza linii de receptie sau miscari de stoc.
 - Numai `cod_fgo` este unic in catalog. `cod_produs` poate aparea pe mai multe produse atunci cand denumirea si codul FGO pastreaza egalitatile din baza FGO.
 - Catalogul initial final contine 5.298 produse: cele patru pozitii cu UM lipsa sau `E48` sunt excluse. Pretul de intrare si maparea la furnizor se completeaza ulterior din facturi.
+- Produsul adaugat manual primeste automat `cod_fgo`. Poate fi salvat inactiv fara pret de intrare; activarea cere Description of Goods, descriere in romana si pret de vanzare cu TVA.
 - Storno poate contine numai o parte dintre produsele unei facturi anterioare. Produsele noi sunt interzise: maparea automata sau manuala poate folosi numai produse care au deja o mapare pentru furnizorul documentului.
 - Receptia storno necesita aceeasi confirmare manuala SAGA, este definitiva si nu modifica ultimul pret de intrare al produsului.
 - Furnizori confirmati suplimentar: `Scootercraft S.O.O` (`PL6793242148`, Polonia, EUR) si `RACING PLANET Vertrieb GmbH` (`DE297237364`, Germania, EUR). Produsele lor se mapeaza numai la importul facturilor de test, dupa confirmarea eventualelor egalitati.

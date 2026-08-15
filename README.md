@@ -16,6 +16,9 @@ Ordinea curentă:
 6. `006_necesar_aprovizionare.sql`
 7. `007_furnizori_si_linii_cost.sql`
 8. `008_cod_produs_neunic.sql`
+9. `009_autentificare_admin.sql`
+
+După aplicarea migrării `009`, accesează `/configurare-administrator` și setează parola pentru administratorul unic `nusescu@gmail.com`. Pagina devine indisponibilă după crearea utilizatorului. Nu există înregistrare publică sau recuperare de parolă în această versiune.
 
 Migrările SQL nu se aplică automat prin `php artisan migrate`. Aplicarea lor pe baza online necesită confirmare explicită.
 

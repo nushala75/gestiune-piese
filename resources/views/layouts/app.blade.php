@@ -23,7 +23,9 @@
         main { min-width:0; }
         .topbar { height:72px; display:flex; justify-content:space-between; align-items:center; padding:0 32px; background:#fff; border-bottom:1px solid var(--line); }
         .topbar strong { font-size:18px; }
+        .topbar-account { display:flex; align-items:center; gap:12px; }
         .company { color:var(--muted); font-size:13px; }
+        .logout-button { padding:7px 10px; background:#eef3f7; color:var(--navy); font-size:12px; }
         .content { padding:22px 24px 40px; }
         .page-head { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:24px; }
         h1 { margin:0 0 4px; font-size:28px; letter-spacing:-.02em; }
@@ -68,6 +70,7 @@
         .row-actions { min-width:126px; display:flex; gap:4px; }
         .row-actions button { width:auto; padding:6px 8px; border-radius:6px; font-size:11px; }
         .button-secondary { display:inline-block; margin-top:7px; width:100%; padding:8px 10px; border:1px solid #9eb2c4; border-radius:8px; color:var(--blue); background:#fff; text-align:center; text-decoration:none; font-weight:700; }
+        .page-action { width:auto; margin:0; padding:9px 14px; }
         .row-actions .button-secondary { width:auto; margin:0; padding:5px 7px; border-radius:6px; font-size:11px; }
         .row-actions .button-danger { width:auto; margin:0; padding:5px 7px; border-radius:6px; font-size:11px; }
         .form-panel { max-width:900px; padding:22px; }
@@ -140,7 +143,13 @@
     <main>
         <header class="topbar">
             <strong>@yield('section', 'Panou principal')</strong>
-            <div class="company">DESIGN MEDIA BUSINESS SRL · RO20548513 · Gestiune FIRMA</div>
+            <div class="topbar-account">
+                <div class="company">{{ auth()->user()->email }} · DESIGN MEDIA BUSINESS SRL · FIRMA</div>
+                <form method="post" action="{{ route('logout') }}">
+                    @csrf
+                    <button class="logout-button" type="submit">Ieșire</button>
+                </form>
+            </div>
         </header>
         <div class="content">@yield('content')</div>
     </main>
