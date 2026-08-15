@@ -149,7 +149,6 @@ class ProdusController extends Controller
                 'required',
                 'string',
                 'max:64',
-                Rule::unique('produse', 'cod_produs')->ignore($produs->id),
             ],
             'denumire_engleza' => ['required', 'string', 'max:255'],
             'descriere_romana' => ['nullable', 'string'],

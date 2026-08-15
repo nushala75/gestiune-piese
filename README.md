@@ -11,6 +11,11 @@ Ordinea curentă:
 1. `001_initial_schema.sql`
 2. `002_extindere_interval_cod_fgo.sql`
 3. `003_pret_achizitie_4_zecimale.sql`
+4. `004_cantitati_intregi.sql`
+5. `005_tip_document_storno.sql`
+6. `006_necesar_aprovizionare.sql`
+7. `007_furnizori_si_linii_cost.sql`
+8. `008_cod_produs_neunic.sql`
 
 Migrările SQL nu se aplică automat prin `php artisan migrate`. Aplicarea lor pe baza online necesită confirmare explicită.
 
@@ -21,6 +26,22 @@ Seederul idempotent creează cele șapte produse MOTO TREND, mapările furnizoru
 ```bash
 php artisan db:seed --class=ProduseTestSeeder
 ```
+
+## Înlocuirea datelor de test cu baza îmbunătățită
+
+După aplicarea migrărilor `001`–`008`, catalogul final poate fi verificat fără modificări:
+
+```bash
+php artisan catalog:replace-production --dry-run
+```
+
+Operația definitivă acceptă exclusiv baza `piesekym_gestiune`, creează mai întâi o copie JSONL în `storage/app/private/backups`, șterge datele de test dependente și importă 5.298 produse fără mapări inițiale la furnizori:
+
+```bash
+php artisan catalog:replace-production --confirm=STERGE-TESTELE-SI-IMPORTA-5298
+```
+
+Fișierul sursă verificat este `database/data/baza_produse_imbunatatita.csv`. Cele patru poziții cu UM lipsă sau `E48` nu sunt incluse.
 
 ## Interfață
 

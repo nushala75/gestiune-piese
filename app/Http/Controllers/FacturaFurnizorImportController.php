@@ -224,7 +224,7 @@ class FacturaFurnizorImportController extends Controller
 
         $data = $request->validate([
             'token' => ['required', 'uuid'],
-            'cod_produs' => ['required', 'string', 'max:64', Rule::unique('produse', 'cod_produs')],
+            'cod_produs' => ['required', 'string', 'max:64'],
             'denumire_engleza' => ['required', 'string', 'max:255'],
             'descriere_romana' => ['nullable', 'string'],
             'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
@@ -446,7 +446,7 @@ class FacturaFurnizorImportController extends Controller
         }
 
         $data = $request->validate([
-            'cod_produs' => ['required', 'string', 'max:64', Rule::unique('produse', 'cod_produs')],
+            'cod_produs' => ['required', 'string', 'max:64'],
             'denumire_engleza' => ['required', 'string', 'max:255'],
             'descriere_romana' => ['nullable', 'string'],
             'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
