@@ -16,8 +16,8 @@
 
     <div class="page-head">
         <div>
-            <h1>Verifică factura înainte de import</h1>
-            <p class="lead">Toate câmpurile pozițiilor pot fi corectate manual. Prețul unitar este Amount / Cantitate.</p>
+            <h1>Verifică {{ ($draft['tip_document'] ?? 'factura') === 'storno' ? 'factura storno' : 'factura' }} înainte de import</h1>
+            <p class="lead">Toate câmpurile pozițiilor pot fi corectate manual. Prețul unitar este Amount / Cantitate.@if(($draft['tip_document'] ?? 'factura') === 'storno') Cantitățile se vor scădea din stoc.@endif</p>
         </div>
         <form method="post" action="{{ route('facturi-furnizori.cancel') }}">
             @csrf
@@ -79,8 +79,10 @@
                                             <button form="price-confirm-{{ $index }}" type="submit">OK</button>
                                         </div>
                                     @endif
-                                @else
+                                @elseif(($draft['tip_document'] ?? 'factura') !== 'storno')
                                     <a class="button-secondary" href="{{ route('facturi-furnizori.produs-nou', ['line' => $index]) }}">Produs NOU</a>
+                                @else
+                                    <span class="status-unmapped">Selectează produs existent</span>
                                 @endif
                             </td>
                         </tr>
@@ -90,7 +92,7 @@
             </div>
             <div class="confirm-bar">
                 <span><strong>TVA factură: 0%</strong><br><small>Taxare inversă: DA</small></span>
-                <button type="submit">Confirmă și salvează factura</button>
+                <button @class(['button-danger' => ($draft['tip_document'] ?? 'factura') === 'storno']) type="submit">Confirmă și salvează {{ ($draft['tip_document'] ?? 'factura') === 'storno' ? 'storno' : 'factura' }}</button>
             </div>
         </section>
     </form>

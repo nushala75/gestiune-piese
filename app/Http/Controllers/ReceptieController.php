@@ -36,9 +36,39 @@ class ReceptieController extends Controller
                 ->withErrors(['receptie' => 'Recepția integrală nu poate fi creată: există poziții fără produs mapat.']);
         }
 
-        $this->gestiuneFirma();
+        $gestiune = $this->gestiuneFirma();
+        $avertismenteStoc = collect();
+        if ($factura->tip_document === 'storno') {
+            $cantitatiPeProdus = $factura->linii
+                ->groupBy('produs_id')
+                ->map(fn ($linii): int => (int) $linii->sum('cantitate'));
+            $solduri = DB::table('solduri_stoc')
+                ->where('gestiune_id', $gestiune->id)
+                ->whereIn('produs_id', $cantitatiPeProdus->keys())
+                ->pluck('cantitate_fizica', 'produs_id');
 
-        return view('receptii.create', compact('factura'));
+            $avertismenteStoc = $cantitatiPeProdus
+                ->map(function (int $cantitate, int|string $produsId) use ($factura, $solduri): ?array {
+                    $stocCurent = (int) ($solduri[$produsId] ?? 0);
+                    $stocDupa = $stocCurent - $cantitate;
+                    if ($stocDupa >= 0) {
+                        return null;
+                    }
+
+                    $produs = $factura->linii->firstWhere('produs_id', (int) $produsId)?->produs;
+
+                    return [
+                        'produs' => $produs?->cod_produs.' '.$produs?->denumire_engleza,
+                        'stoc_curent' => $stocCurent,
+                        'cantitate_storno' => $cantitate,
+                        'stoc_dupa' => $stocDupa,
+                    ];
+                })
+                ->filter()
+                ->values();
+        }
+
+        return view('receptii.create', compact('factura', 'avertismenteStoc'));
     }
 
     public function store(Request $request, FacturaFurnizor $factura): RedirectResponse
@@ -73,6 +103,7 @@ class ReceptieController extends Controller
             }
 
             $gestiune = $this->gestiuneFirma();
+            $esteStorno = $facturaBlocata->tip_document === 'storno';
             $receptie = Receptie::query()->create([
                 'factura_id' => $facturaBlocata->id,
                 'gestiune_id' => $gestiune->id,
@@ -85,6 +116,7 @@ class ReceptieController extends Controller
                     ->toScale(4, RoundingMode::HalfUp)
                     ->__toString();
 
+                $cantitateMiscare = $esteStorno ? -$linieFactura->cantitate : $linieFactura->cantitate;
                 $linieReceptie = ReceptieLinie::query()->create([
                     'receptie_id' => $receptie->id,
                     'factura_linie_id' => $linieFactura->id,
@@ -97,13 +129,13 @@ class ReceptieController extends Controller
                 MiscareStoc::query()->create([
                     'gestiune_id' => $gestiune->id,
                     'produs_id' => $linieFactura->produs_id,
-                    'tip' => 'intrare_receptie',
-                    'cantitate' => $linieFactura->cantitate,
+                    'tip' => $esteStorno ? 'iesire_storno' : 'intrare_receptie',
+                    'cantitate' => $cantitateMiscare,
                     'cost_unitar' => $costUnitar,
                     'receptie_linie_id' => $linieReceptie->id,
                     'referinta_tip' => 'factura_furnizor',
                     'referinta_id' => $facturaBlocata->id,
-                    'explicatie' => "Recepție integrală factura {$facturaBlocata->numar_original}",
+                    'explicatie' => ($esteStorno ? 'Recepție storno' : 'Recepție integrală')." factura {$facturaBlocata->numar_original}",
                 ]);
 
                 $sold = DB::table('solduri_stoc')
@@ -116,7 +148,7 @@ class ReceptieController extends Controller
                     DB::table('solduri_stoc')->insert([
                         'gestiune_id' => $gestiune->id,
                         'produs_id' => $linieFactura->produs_id,
-                        'cantitate_fizica' => $linieFactura->cantitate,
+                        'cantitate_fizica' => $cantitateMiscare,
                         'cantitate_rezervata' => 0,
                         'updated_at' => now(),
                     ]);
@@ -125,29 +157,31 @@ class ReceptieController extends Controller
                         ->where('gestiune_id', $gestiune->id)
                         ->where('produs_id', $linieFactura->produs_id)
                         ->update([
-                            'cantitate_fizica' => (int) $sold->cantitate_fizica + $linieFactura->cantitate,
+                            'cantitate_fizica' => (int) $sold->cantitate_fizica + $cantitateMiscare,
                             'updated_at' => now(),
                         ]);
                 }
 
-                ProdusFurnizor::query()->updateOrCreate(
-                    [
-                        'furnizor_id' => $facturaBlocata->furnizor_id,
-                        'cod_furnizor' => $linieFactura->cod_furnizor,
-                    ],
-                    [
-                        'produs_id' => $linieFactura->produs_id,
-                        'denumire_furnizor' => $linieFactura->descriere_originala,
-                        'pret_achizitie_ultim' => $costUnitar,
-                        'moneda' => $facturaBlocata->moneda,
-                        'data_ultimei_achizitii' => $facturaBlocata->data_factura,
-                    ]
-                );
+                if (! $esteStorno) {
+                    ProdusFurnizor::query()->updateOrCreate(
+                        [
+                            'furnizor_id' => $facturaBlocata->furnizor_id,
+                            'cod_furnizor' => $linieFactura->cod_furnizor,
+                        ],
+                        [
+                            'produs_id' => $linieFactura->produs_id,
+                            'denumire_furnizor' => $linieFactura->descriere_originala,
+                            'pret_achizitie_ultim' => $costUnitar,
+                            'moneda' => $facturaBlocata->moneda,
+                            'data_ultimei_achizitii' => $facturaBlocata->data_factura,
+                        ]
+                    );
+                }
             }
         });
 
         return redirect()->route('facturi-furnizori.show', $factura)
-            ->with('status', "Recepția integrală a facturii {$factura->numar_original} a fost finalizată definitiv.");
+            ->with('status', ($factura->tip_document === 'storno' ? 'Recepția storno' : 'Recepția integrală')." a facturii {$factura->numar_original} a fost finalizată definitiv.");
     }
 
     private function gestiuneFirma(): Gestiune

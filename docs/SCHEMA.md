@@ -14,6 +14,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Pretul de intrare si moneda furnizorului sunt pastrate in `produse_furnizori`; pretul de intrare are 4 zecimale.
 - Toate cantitatile sunt numere intregi (`BIGINT`): stoc minim, linii de factura si receptie, miscari si solduri de stoc, respectiv liniile exportului FGO.
 - Stocul nu este stocat in `produse`; soldul curent este in `solduri_stoc` si istoricul in `miscari_stoc`.
+- Lista de produse permite filtre combinabile dupa denumire sau cod, categorie si stocul din gestiunea FIRMA (`pozitiv`, `zero` sau `negativ`). Produsele fara sold sunt incluse la stoc zero.
 - Tipul contabil SAGA `Marfuri gestiune 1 firma` este o regula fixa de export, nu o coloana duplicata in `produse`.
 - Stocul este explicat prin `miscari_stoc`; `solduri_stoc` este soldul operational actualizat tranzactional.
 - Amount-ul liniei MOTO TREND ramane sursa de adevar. Pretul calculat are precizie extinsa.
@@ -28,6 +29,9 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Importul facturii nu modifica stocul. Pretul de vanzare se poate modifica in previzualizare numai prin confirmarea explicita `OK`; celelalte actualizari de cantitati si preturi se aplica la etapa `Receptie`, dupa confirmarea importului SAGA.
 - Receptia este permisa numai pentru o factura cu import finalizat si toate pozitiile mapate. Este integrala, necesita bifarea confirmarii ca importul in SAGA a fost facut manual si foloseste o data editabila, completata implicit cu data curenta.
 - Finalizarea receptiei este definitiva: toate liniile, miscarile de stoc, soldurile si ultimele preturi de intrare sunt salvate intr-o singura tranzactie. Unicitatea facturii in `receptii` si verificarea tranzactionala impiedica dublarea stocului.
+- Factura storno se introduce printr-o optiune separata si nu necesita legatura cu o factura initiala. Cantitatile si valorile sunt pozitive in PDF, dar receptia storno creeaza miscari negative si scade stocul; stocul negativ este permis dupa afisarea unei avertizari.
+- Storno poate contine numai o parte dintre produsele unei facturi anterioare. Produsele noi sunt interzise: maparea automata sau manuala poate folosi numai produse care au deja o mapare pentru furnizorul documentului.
+- Receptia storno necesita aceeasi confirmare manuala SAGA, este definitiva si nu modifica ultimul pret de intrare al produsului.
 - Egalitatea `Amount = cantitate * pret_unitar_calculat` se verifica in serviciul de import folosind aritmetica zecimala; nu este impusa printr-un CHECK SQL sensibil la rotunjire.
 - Importul FGO ramane cu `mod_actualizare` NULL pana la verificarea sensului coloanei Cantitate.
 - Accesul SAGA nu este automatizat de schema bazei si necesita confirmare prealabila.

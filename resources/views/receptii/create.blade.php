@@ -6,7 +6,7 @@
 @section('content')
     <div class="page-head">
         <div>
-            <h1>Recepție {{ $factura->numar_original }}</h1>
+            <h1>{{ $factura->tip_document === 'storno' ? 'Recepție storno' : 'Recepție' }} {{ $factura->numar_original }}</h1>
             <p class="lead">{{ $factura->furnizor->denumire }} · {{ $factura->linii->count() }} poziții · {{ $factura->linii->sum('cantitate') }} bucăți</p>
         </div>
         <span class="pill">Gestiune FIRMA</span>
@@ -20,8 +20,24 @@
     @endif
 
     <div class="notice">
-        Recepția este integrală și definitivă. La finalizare se adaugă în stoc toate cantitățile de mai jos și se actualizează prețurile de intrare în {{ $factura->moneda }}.
+        @if($factura->tip_document === 'storno')
+            Recepția storno este definitivă. La finalizare se scad din stoc cantitățile pozitive din document. Prețurile de intrare rămân neschimbate.
+        @else
+            Recepția este integrală și definitivă. La finalizare se adaugă în stoc toate cantitățile de mai jos și se actualizează prețurile de intrare în {{ $factura->moneda }}.
+        @endif
     </div>
+
+    @if($avertismenteStoc->isNotEmpty())
+        <div class="notice">
+            <strong>Atenție: recepția storno va genera stoc negativ.</strong>
+            <ul>
+                @foreach($avertismenteStoc as $avertisment)
+                    <li>{{ $avertisment['produs'] }}: stoc {{ $avertisment['stoc_curent'] }} − {{ $avertisment['cantitate_storno'] }} = {{ $avertisment['stoc_dupa'] }}</li>
+                @endforeach
+            </ul>
+            Operația este permisă și poate fi continuată după verificare.
+        </div>
+    @endif
 
     <section class="panel">
         <div class="panel-head"><h2>Pozițiile recepției</h2></div>
@@ -58,7 +74,7 @@
                 </label>
             </div>
             <div class="form-actions">
-                <button type="submit">Finalizează recepția</button>
+                <button @class(['button-danger' => $factura->tip_document === 'storno']) type="submit">Finalizează {{ $factura->tip_document === 'storno' ? 'recepția storno' : 'recepția' }}</button>
                 <a class="button-secondary" href="{{ route('facturi-furnizori.show', $factura) }}">Înapoi la factură</a>
             </div>
         </section>

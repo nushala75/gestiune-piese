@@ -15,6 +15,7 @@ use App\Services\MotoTrendInvoiceParser;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +43,16 @@ class FacturaFurnizorImportController extends Controller
 
     public function upload(Request $request, MotoTrendInvoiceParser $parser): RedirectResponse
     {
+        return $this->uploadDocument($request, $parser, 'factura');
+    }
+
+    public function uploadStorno(Request $request, MotoTrendInvoiceParser $parser): RedirectResponse
+    {
+        return $this->uploadDocument($request, $parser, 'storno');
+    }
+
+    private function uploadDocument(Request $request, MotoTrendInvoiceParser $parser, string $tipDocument): RedirectResponse
+    {
         $request->validate([
             'factura_pdf' => ['required', 'file', 'mimes:pdf', 'max:20480'],
         ]);
@@ -52,7 +63,8 @@ class FacturaFurnizorImportController extends Controller
             return back()->withErrors(['factura_pdf' => 'Amprenta fișierului PDF nu a putut fi calculată.']);
         }
 
-        if (ImportFisier::query()->where('tip', 'factura_furnizor_moto_trend')->where('hash_sha256', $hash)->exists()) {
+        $tipImport = $tipDocument === 'storno' ? 'storno_furnizor_moto_trend' : 'factura_furnizor_moto_trend';
+        if (ImportFisier::query()->where('tip', $tipImport)->where('hash_sha256', $hash)->exists()) {
             return back()->withErrors(['factura_pdf' => 'Acest fișier a fost deja importat.']);
         }
 
@@ -98,11 +110,12 @@ class FacturaFurnizorImportController extends Controller
             $line['product_label'] = $mapping?->produs
                 ? $mapping->produs->cod_produs.' '.$mapping->produs->denumire_engleza
                 : null;
-            $line['current_sale_price'] = $mapping?->produs?->pret_vanzare_cu_tva;
-            $line['proposed_sale_price'] = $line['unit_price'] !== ''
+            $line['current_sale_price'] = $tipDocument === 'storno' ? null : $mapping?->produs?->pret_vanzare_cu_tva;
+            $line['proposed_sale_price'] = $tipDocument !== 'storno' && $line['unit_price'] !== ''
                 ? BigDecimal::of($line['unit_price'])->multipliedBy(self::SALE_PRICE_MULTIPLIER)->toScale(2, RoundingMode::HalfUp)->__toString()
                 : null;
-            $line['price_warning'] = $mapping?->produs !== null
+            $line['price_warning'] = $tipDocument !== 'storno'
+                && $mapping?->produs !== null
                 && $line['proposed_sale_price'] !== null
                 && ($line['current_sale_price'] === null
                     || BigDecimal::of($line['proposed_sale_price'])->isGreaterThan($line['current_sale_price']));
@@ -114,6 +127,7 @@ class FacturaFurnizorImportController extends Controller
             'temporary_path' => $temporaryPath,
             'original_name' => mb_substr($file->getClientOriginalName(), 0, 255),
             'hash' => $hash,
+            'tip_document' => $tipDocument,
             'invoice' => $invoice,
         ];
         $request->session()->put(self::SESSION_KEY, $draft);
@@ -129,9 +143,17 @@ class FacturaFurnizorImportController extends Controller
                 ->withErrors(['factura_pdf' => 'Nu există o factură în curs de verificare.']);
         }
 
+        $produse = Produs::query()
+            ->when(($draft['tip_document'] ?? 'factura') === 'storno', function (Builder $query) use ($draft): void {
+                $query->whereHas('furnizori.furnizor', fn (Builder $supplierQuery) => $supplierQuery
+                    ->where('cod_fiscal', $draft['invoice']['supplier_vat']));
+            })
+            ->orderBy('cod_produs')
+            ->get(['id', 'cod_produs', 'denumire_engleza']);
+
         return view('facturi-furnizori.preview', [
             'draft' => $draft,
-            'produse' => Produs::query()->orderBy('cod_produs')->get(['id', 'cod_produs', 'denumire_engleza']),
+            'produse' => $produse,
         ]);
     }
 
@@ -141,6 +163,10 @@ class FacturaFurnizorImportController extends Controller
         if (! is_array($draft) || ! isset($draft['invoice']['lines'][$line])) {
             return redirect()->route('facturi-furnizori.preview')
                 ->withErrors(['lines' => 'Poziția facturii nu mai este disponibilă.']);
+        }
+        if (($draft['tip_document'] ?? 'factura') === 'storno') {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Într-o factură storno nu se pot crea produse noi. Selectează un produs deja mapat la furnizor.']);
         }
 
         $invoiceLine = $draft['invoice']['lines'][$line];
@@ -179,6 +205,10 @@ class FacturaFurnizorImportController extends Controller
             || ! isset($draft['invoice']['lines'][$line])) {
             return redirect()->route('facturi-furnizori.index')
                 ->withErrors(['factura_pdf' => 'Previzualizarea a expirat. Încarcă din nou factura.']);
+        }
+        if (($draft['tip_document'] ?? 'factura') === 'storno') {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Într-o factură storno nu se pot crea produse noi.']);
         }
 
         $invoiceLine = $draft['invoice']['lines'][$line];
@@ -287,6 +317,10 @@ class FacturaFurnizorImportController extends Controller
             return redirect()->route('facturi-furnizori.index')
                 ->withErrors(['factura_pdf' => 'Previzualizarea a expirat. Încarcă din nou factura.']);
         }
+        if (($draft['tip_document'] ?? 'factura') === 'storno') {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Factura storno nu modifică prețurile produselor.']);
+        }
 
         $invoiceLine = $draft['invoice']['lines'][$line];
         if (empty($invoiceLine['product_id'])) {
@@ -326,14 +360,24 @@ class FacturaFurnizorImportController extends Controller
     {
         $factura->load(['furnizor', 'linii.produs', 'receptie']);
 
+        $produse = Produs::query()
+            ->when($factura->tip_document === 'storno', fn (Builder $query) => $query
+                ->whereHas('furnizori', fn (Builder $mappingQuery) => $mappingQuery->where('furnizor_id', $factura->furnizor_id)))
+            ->orderBy('cod_produs')
+            ->get(['id', 'cod_produs', 'denumire_engleza']);
+
         return view('facturi-furnizori.show', [
             'factura' => $factura,
-            'produse' => Produs::query()->orderBy('cod_produs')->get(['id', 'cod_produs', 'denumire_engleza']),
+            'produse' => $produse,
         ]);
     }
 
     public function newProductFromImported(FacturaFurnizor $factura, FacturaFurnizorLinie $linie): View|RedirectResponse
     {
+        if ($factura->tip_document === 'storno') {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Într-o factură storno nu se pot crea produse noi.']);
+        }
         if ($linie->factura_id !== $factura->id || $linie->produs_id !== null || $factura->status !== 'import_partial') {
             return redirect()->route('facturi-furnizori.show', $factura)
                 ->withErrors(['factura' => 'Poziția nu este disponibilă pentru crearea unui produs nou.']);
@@ -373,6 +417,10 @@ class FacturaFurnizorImportController extends Controller
         FacturaFurnizorLinie $linie,
         CodFgoAllocator $allocator,
     ): RedirectResponse {
+        if ($factura->tip_document === 'storno') {
+            return redirect()->route('facturi-furnizori.show', $factura)
+                ->withErrors(['factura' => 'Într-o factură storno nu se pot crea produse noi.']);
+        }
         if ($linie->factura_id !== $factura->id
             || $linie->produs_id !== null
             || $factura->status !== 'import_partial'
@@ -464,9 +512,12 @@ class FacturaFurnizorImportController extends Controller
             return back()->withErrors(['factura' => 'Mapările nu mai pot fi modificate după crearea recepției.']);
         }
 
+        $productRule = $factura->tip_document === 'storno'
+            ? Rule::exists('produse_furnizori', 'produs_id')->where('furnizor_id', $factura->furnizor_id)
+            : Rule::exists('produse', 'id');
         $data = $request->validate([
             'lines' => ['required', 'array'],
-            'lines.*.product_id' => ['nullable', 'integer', Rule::exists('produse', 'id')],
+            'lines.*.product_id' => ['nullable', 'integer', $productRule],
         ]);
 
         $factura->load('linii');
@@ -479,7 +530,7 @@ class FacturaFurnizorImportController extends Controller
                     'observatii' => $productId ? $line->observatii : 'Produsul necesită mapare manuală.',
                 ]);
 
-                if ($productId) {
+                if ($productId && $factura->tip_document !== 'storno') {
                     ProdusFurnizor::query()->updateOrCreate(
                         [
                             'furnizor_id' => $factura->furnizor_id,
@@ -557,6 +608,10 @@ class FacturaFurnizorImportController extends Controller
                 ->withErrors(['factura_pdf' => 'Previzualizarea a expirat. Încarcă din nou factura.']);
         }
 
+        $supplier = Furnizor::query()->where('cod_fiscal', $draft['invoice']['supplier_vat'])->first();
+        $productRule = ($draft['tip_document'] ?? 'factura') === 'storno'
+            ? Rule::exists('produse_furnizori', 'produs_id')->where('furnizor_id', $supplier?->id ?? 0)
+            : Rule::exists('produse', 'id');
         $validated = $request->validate([
             'token' => ['required', 'uuid'],
             'lines' => ['required', 'array', 'min:1'],
@@ -564,7 +619,7 @@ class FacturaFurnizorImportController extends Controller
             'lines.*.description' => ['required', 'string', 'max:500'],
             'lines.*.quantity' => ['required', 'integer', 'min:1'],
             'lines.*.amount' => ['required', 'decimal:0,2', 'min:0.01'],
-            'lines.*.product_id' => ['nullable', 'integer', Rule::exists('produse', 'id')],
+            'lines.*.product_id' => ['nullable', 'integer', $productRule],
         ], [
             'lines.*.description.required' => 'Description of Goods este obligatorie pentru fiecare poziție.',
         ]);
@@ -592,7 +647,8 @@ class FacturaFurnizorImportController extends Controller
             throw new RuntimeException('Fișierul temporar al facturii a fost modificat.');
         }
 
-        $finalPath = 'importuri/facturi-furnizori/'.date('Y').'/'.$draft['hash'].'.pdf';
+        $folderDocument = ($draft['tip_document'] ?? 'factura') === 'storno' ? 'storno' : 'facturi';
+        $finalPath = "importuri/facturi-furnizori/{$folderDocument}/".date('Y').'/'.$draft['hash'].'.pdf';
 
         try {
             $factura = DB::transaction(function () use ($draft, $finalPath, $invoice, $temporaryPath, $validated): FacturaFurnizor {
@@ -608,7 +664,7 @@ class FacturaFurnizorImportController extends Controller
                 );
 
                 $import = ImportFisier::query()->create([
-                    'tip' => 'factura_furnizor_moto_trend',
+                    'tip' => ($draft['tip_document'] ?? 'factura') === 'storno' ? 'storno_furnizor_moto_trend' : 'factura_furnizor_moto_trend',
                     'nume_fisier' => $draft['original_name'],
                     'hash_sha256' => $draft['hash'],
                     'cale_stocare' => $finalPath,
@@ -633,6 +689,7 @@ class FacturaFurnizorImportController extends Controller
                     'total_tva' => '0.00',
                     'total_factura' => $invoice['total_amount'],
                     'taxare_inversa' => true,
+                    'tip_document' => $draft['tip_document'] ?? 'factura',
                     'status' => $hasUnmapped ? 'import_partial' : 'import_finalizat',
                 ]);
 
@@ -641,7 +698,7 @@ class FacturaFurnizorImportController extends Controller
                         ->dividedBy((int) $line['quantity'], 4, RoundingMode::HalfUp)
                         ->__toString();
                     $priceObservation = null;
-                    if ($line['product_id']) {
+                    if ($line['product_id'] && ($draft['tip_document'] ?? 'factura') !== 'storno') {
                         $product = Produs::query()->findOrFail($line['product_id']);
                         $proposedSalePrice = BigDecimal::of($unitPrice)
                             ->multipliedBy(self::SALE_PRICE_MULTIPLIER)
@@ -664,7 +721,9 @@ class FacturaFurnizorImportController extends Controller
                         'cota_tva' => '0.00',
                         'valoare_tva' => '0.00',
                         'status_mapare' => $line['product_id'] ? 'mapat' : 'necesita_mapare',
-                        'observatii' => $line['product_id'] ? $priceObservation : 'Produsul necesită mapare manuală.',
+                        'observatii' => $line['product_id'] ? $priceObservation : (($draft['tip_document'] ?? 'factura') === 'storno'
+                            ? 'Selectează un produs existent, deja mapat la furnizor.'
+                            : 'Produsul necesită mapare manuală.'),
                     ]);
                 }
 
@@ -683,7 +742,7 @@ class FacturaFurnizorImportController extends Controller
         $request->session()->forget(self::SESSION_KEY);
 
         return redirect()->route('facturi-furnizori.index')
-            ->with('status', "Factura {$factura->numar_original} a fost importată cu {$factura->linii()->count()} poziții.");
+            ->with('status', ($factura->tip_document === 'storno' ? 'Factura storno' : 'Factura')." {$factura->numar_original} a fost importată cu {$factura->linii()->count()} poziții.");
     }
 
     public function cancel(Request $request): RedirectResponse

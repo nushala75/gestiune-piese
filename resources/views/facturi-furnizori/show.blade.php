@@ -14,7 +14,7 @@
 
     <div class="page-head">
         <div>
-            <h1>{{ $factura->numar_original }}</h1>
+            <h1>{{ $factura->tip_document === 'storno' ? 'Storno' : 'Factura' }} {{ $factura->numar_original }}</h1>
             <p class="lead">{{ $factura->furnizor->denumire }} · {{ $factura->data_factura->format('d.m.Y') }} · {{ number_format((float) $factura->total_factura, 2, ',', '.') }} {{ $factura->moneda }}</p>
         </div>
         <span class="pill">{{ $factura->receptie ? 'Recepție finalizată' : ($factura->status === 'import_partial' ? 'Import parțial' : 'Import finalizat') }}</span>
@@ -47,8 +47,10 @@
                             <td>
                                 @if($line->produs_id)
                                     <span class="status-mapped">Mapat</span>
-                                @else
+                                @elseif($factura->tip_document !== 'storno')
                                     <a class="button-secondary" href="{{ route('facturi-furnizori.importat.produs-nou', ['factura' => $factura, 'linie' => $line]) }}">Produs NOU</a>
+                                @else
+                                    <span class="status-unmapped">Selectează produs existent</span>
                                 @endif
                             </td>
                         </tr>
@@ -70,7 +72,7 @@
             </form>
         @endif
         @if(!$factura->receptie && $factura->status === 'import_finalizat')
-            <a class="button-secondary" href="{{ route('receptii.create', $factura) }}">Recepție</a>
+            <a @class(['button-secondary', 'button-danger' => $factura->tip_document === 'storno']) href="{{ route('receptii.create', $factura) }}">{{ $factura->tip_document === 'storno' ? 'Recepție storno' : 'Recepție' }}</a>
         @endif
         @if($factura->receptie)
             <span class="pill">Recepționată la {{ $factura->receptie->data_receptie->format('d.m.Y') }} · definitiv</span>

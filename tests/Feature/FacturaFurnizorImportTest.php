@@ -442,6 +442,87 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertDatabaseCount('receptii', 0);
     }
 
+    public function test_storno_uses_existing_supplier_mappings_and_creates_negative_stock_movements(): void
+    {
+        Storage::fake('local');
+        $this->post('/facturi-furnizori/storno/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend-storno.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $this->assertSame('storno', $draft['tip_document']);
+        $this->get('/facturi-furnizori/previzualizare')
+            ->assertOk()
+            ->assertSee('Verifică factura storno')
+            ->assertSee('Selectează produs existent')
+            ->assertDontSee('Produs NOU');
+
+        $this->get('/facturi-furnizori/previzualizare/produs-nou/10')
+            ->assertRedirect('/facturi-furnizori/previzualizare')
+            ->assertSessionHasErrors('lines');
+
+        $productId = (int) DB::table('produse')->value('id');
+        $gestiuneId = (int) DB::table('gestiuni')->where('cod', 'FIRMA')->value('id');
+        $initialStock = (int) DB::table('solduri_stoc')
+            ->where('gestiune_id', $gestiuneId)
+            ->where('produs_id', $productId)
+            ->value('cantitate_fizica');
+        $initialPurchasePrice = DB::table('produse_furnizori')
+            ->where('produs_id', $productId)
+            ->value('pret_achizitie_ultim');
+        $lines = collect($draft['invoice']['lines'])->map(fn (array $line): array => [
+            'supplier_code' => $line['supplier_code'],
+            'description' => $line['description'],
+            'quantity' => $line['quantity'],
+            'amount' => $line['amount'],
+            'product_id' => $productId,
+        ])->all();
+
+        $unmappedProductId = (int) DB::table('produse')->where('id', '<>', $productId)->value('id');
+        DB::table('produse_furnizori')->where('produs_id', $unmappedProductId)->delete();
+        $invalidLines = $lines;
+        $invalidLines[0]['product_id'] = $unmappedProductId;
+        $this->post('/facturi-furnizori/import', ['token' => $draft['token'], 'lines' => $invalidLines])
+            ->assertSessionHasErrors('lines.0.product_id');
+        $this->assertDatabaseCount('facturi_furnizor', 0);
+
+        $this->post('/facturi-furnizori/import', ['token' => $draft['token'], 'lines' => $lines])
+            ->assertRedirect('/facturi-furnizori')
+            ->assertSessionHasNoErrors();
+
+        $factura = FacturaFurnizor::query()->sole();
+        $this->assertSame('storno', $factura->tip_document);
+        $this->assertSame('import_finalizat', $factura->status);
+        $this->assertDatabaseHas('importuri_fisiere', ['tip' => 'storno_furnizor_moto_trend']);
+
+        $this->get("/facturi-furnizori/{$factura->id}/receptie")
+            ->assertOk()
+            ->assertSee('Recepție storno')
+            ->assertSee('va genera stoc negativ')
+            ->assertSee('Prețurile de intrare rămân neschimbate');
+
+        $this->post("/facturi-furnizori/{$factura->id}/receptie", [
+            'data_receptie' => '2026-08-15',
+            'confirmare_saga' => '1',
+        ])->assertRedirect("/facturi-furnizori/{$factura->id}")
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('miscari_stoc', 47);
+        $this->assertSame(-109, (int) DB::table('miscari_stoc')->sum('cantitate'));
+        $this->assertSame(47, DB::table('miscari_stoc')->where('tip', 'iesire_storno')->count());
+        $this->assertSame(
+            $initialStock - 109,
+            (int) DB::table('solduri_stoc')
+                ->where('gestiune_id', $gestiuneId)
+                ->where('produs_id', $productId)
+                ->value('cantitate_fizica')
+        );
+        $this->assertEquals(
+            $initialPurchasePrice,
+            DB::table('produse_furnizori')->where('produs_id', $productId)->value('pret_achizitie_ultim')
+        );
+    }
+
     public function test_unreceived_invoice_can_be_deleted_and_reimported(): void
     {
         $factura = $this->importInvoice();
@@ -689,6 +770,7 @@ class FacturaFurnizorImportTest extends TestCase
             $table->decimal('total_tva', 18, 2)->default(0);
             $table->decimal('total_factura', 18, 2);
             $table->boolean('taxare_inversa')->default(false);
+            $table->string('tip_document', 16)->default('factura');
             $table->string('status', 32);
             $table->timestamps();
             $table->unique(['furnizor_id', 'numar_original']);

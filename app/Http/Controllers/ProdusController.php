@@ -21,6 +21,16 @@ class ProdusController extends Controller
     public function index(Request $request): View
     {
         $cautare = trim((string) $request->query('q', ''));
+        $filtre = $request->validate([
+            'categorie' => ['nullable', 'integer', Rule::exists('categorii', 'id')],
+            'stoc' => ['nullable', Rule::in(['toate', 'pozitiv', 'zero', 'negativ'])],
+        ]);
+        $categorieSelectata = isset($filtre['categorie']) ? (int) $filtre['categorie'] : null;
+        $filtruStoc = (string) ($filtre['stoc'] ?? 'toate');
+        $gestiune = Gestiune::query()
+            ->where('cod', 'FIRMA')
+            ->whereHas('firma', fn (Builder $query) => $query->where('cod_fiscal', 'RO20548513'))
+            ->sole();
 
         $produse = Produs::query()
             ->with(['categorie', 'unitateMasura', 'furnizori.furnizor', 'solduriStoc.gestiune'])
@@ -33,11 +43,30 @@ class ProdusController extends Controller
                         ->orWhere('descriere_romana', 'like', "%{$cautare}%");
                 });
             })
+            ->when($categorieSelectata !== null, fn (Builder $query) => $query->where('categorie_id', $categorieSelectata))
+            ->when($filtruStoc === 'pozitiv', fn (Builder $query) => $query->whereHas(
+                'solduriStoc',
+                fn (Builder $soldQuery) => $soldQuery->where('gestiune_id', $gestiune->id)->where('cantitate_fizica', '>', 0),
+            ))
+            ->when($filtruStoc === 'negativ', fn (Builder $query) => $query->whereHas(
+                'solduriStoc',
+                fn (Builder $soldQuery) => $soldQuery->where('gestiune_id', $gestiune->id)->where('cantitate_fizica', '<', 0),
+            ))
+            ->when($filtruStoc === 'zero', fn (Builder $query) => $query->where(function (Builder $stockQuery) use ($gestiune): void {
+                $stockQuery
+                    ->whereHas('solduriStoc', fn (Builder $soldQuery) => $soldQuery
+                        ->where('gestiune_id', $gestiune->id)
+                        ->where('cantitate_fizica', 0))
+                    ->orWhereDoesntHave('solduriStoc', fn (Builder $soldQuery) => $soldQuery
+                        ->where('gestiune_id', $gestiune->id));
+            }))
             ->orderBy('cod_produs')
             ->paginate(25)
             ->withQueryString();
 
-        return view('produse.index', compact('produse', 'cautare'));
+        $categorii = Categorie::query()->orderBy('denumire')->get(['id', 'denumire']);
+
+        return view('produse.index', compact('produse', 'cautare', 'categorii', 'categorieSelectata', 'filtruStoc'));
     }
 
     public function updateRapid(Request $request, Produs $produs): RedirectResponse

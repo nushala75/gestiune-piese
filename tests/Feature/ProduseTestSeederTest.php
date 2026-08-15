@@ -138,6 +138,32 @@ class ProduseTestSeederTest extends TestCase
             ->assertDontSee('Vânzare fără TVA');
     }
 
+    public function test_products_can_be_filtered_by_name_category_and_stock(): void
+    {
+        app(ProduseTestSeeder::class)->run();
+        $marfuriId = DB::table('categorii')->where('denumire', 'Marfuri')->value('id');
+
+        $this->get('/produse?q=CYLINDER&categorie='.$marfuriId.'&stoc=pozitiv')
+            ->assertOk()
+            ->assertSee('12100-KHE7-900 CYLINDER COMP')
+            ->assertDontSee('11102-1G87-004 RUB BUSH ENG HANGER')
+            ->assertSee('value="pozitiv" selected', false);
+
+        $this->get('/produse?stoc=zero')
+            ->assertOk()
+            ->assertSee('13000-BLB3-910 CARNK SHAFT COMP')
+            ->assertSee('13011-PWB1-900 RING SET PISTON')
+            ->assertDontSee('12100-KHE7-900 CYLINDER COMP');
+
+        $negativeProductId = DB::table('produse')->where('cod_produs', '11102-1G87-004')->value('id');
+        DB::table('solduri_stoc')->where('produs_id', $negativeProductId)->update(['cantitate_fizica' => -2]);
+
+        $this->get('/produse?stoc=negativ')
+            ->assertOk()
+            ->assertSee('11102-1G87-004 RUB BUSH ENG HANGER')
+            ->assertDontSee('12100-KHE7-900 CYLINDER COMP');
+    }
+
     public function test_product_can_be_edited_directly_and_net_price_is_recalculated(): void
     {
         app(ProduseTestSeeder::class)->run();

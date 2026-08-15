@@ -21,16 +21,41 @@
             <h1>Produse</h1>
             <p class="lead">Catalogul local cu maparea FGO, prețuri și stoc.</p>
         </div>
-        <form class="search" method="get" action="{{ route('produse.index') }}">
-            <input type="search" name="q" value="{{ $cautare }}" placeholder="Cod FGO, cod produs sau denumire" aria-label="Caută produse">
-            <button type="submit">Caută</button>
-        </form>
     </div>
+
+    <form class="product-filters" method="get" action="{{ route('produse.index') }}">
+        <label>
+            <span>Denumire produs</span>
+            <input type="search" name="q" value="{{ $cautare }}" placeholder="Denumire, cod produs sau cod FGO">
+        </label>
+        <label>
+            <span>Categorie</span>
+            <select name="categorie">
+                <option value="">Toate categoriile</option>
+                @foreach($categorii as $categorie)
+                    <option value="{{ $categorie->id }}" @selected($categorieSelectata === $categorie->id)>{{ $categorie->denumire }}</option>
+                @endforeach
+            </select>
+        </label>
+        <label>
+            <span>Stoc</span>
+            <select name="stoc">
+                <option value="toate" @selected($filtruStoc === 'toate')>Toate</option>
+                <option value="pozitiv" @selected($filtruStoc === 'pozitiv')>Pozitiv</option>
+                <option value="zero" @selected($filtruStoc === 'zero')>Zero</option>
+                <option value="negativ" @selected($filtruStoc === 'negativ')>Negativ</option>
+            </select>
+        </label>
+        <button type="submit">Filtrează</button>
+        @if($cautare !== '' || $categorieSelectata !== null || $filtruStoc !== 'toate')
+            <a class="button-secondary" href="{{ route('produse.index') }}">Șterge filtrele</a>
+        @endif
+    </form>
 
     <section class="panel">
         <div class="panel-head">
             <h2>{{ $produse->total() }} produse</h2>
-            @if($cautare !== '')<span class="pill">Filtru: {{ $cautare }}</span>@endif
+            @if($cautare !== '' || $categorieSelectata !== null || $filtruStoc !== 'toate')<span class="pill">Filtre active</span>@endif
         </div>
         @if($produse->isEmpty())
             <div class="empty">Nu există produse pentru criteriul selectat.</div>

@@ -33,6 +33,19 @@
         </form>
     </section>
 
+    <section class="panel" style="margin-bottom:20px">
+        <div class="panel-head"><h2>Introducere factură storno MOTO-TREND</h2></div>
+        <form class="import-form" method="post" action="{{ route('facturi-furnizori.storno.upload') }}" enctype="multipart/form-data">
+            @csrf
+            <label>
+                <span>Fișier PDF storno</span>
+                <input type="file" name="factura_pdf" accept="application/pdf,.pdf" required>
+            </label>
+            <button class="button-danger" type="submit">Încarcă storno și previzualizează</button>
+            <small>Cantitățile pozitive din PDF vor deveni scăderi de stoc la recepția storno.</small>
+        </form>
+    </section>
+
     <section class="panel">
         <div class="panel-head"><h2>{{ $facturi->total() }} facturi importate</h2></div>
         @if($facturi->isEmpty())
@@ -44,7 +57,7 @@
                     <tbody>
                     @foreach($facturi as $factura)
                         <tr>
-                            <td><strong>{{ $factura->numar_original }}</strong></td>
+                            <td><strong>{{ $factura->numar_original }}</strong>@if($factura->tip_document === 'storno') <span class="pill">STORNO</span>@endif</td>
                             <td>{{ $factura->data_factura->format('d.m.Y') }}</td>
                             <td>{{ $factura->furnizor->denumire }}</td>
                             <td>{{ $factura->linii->count() }}</td>

@@ -41,9 +41,15 @@
         .quick a, .quick span { padding:16px; border:1px solid var(--line); border-radius:10px; text-decoration:none; background:#fbfdff; }
         .quick span { color:var(--muted); }
         .search { display:flex; gap:8px; }
+        .product-filters { margin-bottom:18px; padding:14px; display:flex; flex-wrap:wrap; align-items:end; gap:10px; background:#fff; border:1px solid var(--line); border-radius:12px; }
+        .product-filters label { display:grid; gap:4px; color:#41566a; font-size:12px; font-weight:700; }
+        .product-filters label:first-child { flex:1 1 300px; }
+        .product-filters input, .product-filters select { min-width:180px; }
+        .product-filters .button-secondary { width:auto; margin:0; padding:8px 12px; }
         input[type=search] { min-width:300px; border:1px solid #bdcbd7; border-radius:9px; padding:10px 12px; font:inherit; }
         button { border:0; border-radius:9px; padding:10px 16px; background:var(--blue); color:#fff; font:inherit; font-weight:700; cursor:pointer; }
         .button-danger { background:#b91c1c; }
+        .button-secondary.button-danger { background:#b91c1c; color:#fff; border-color:#991b1b; }
         input, textarea, select { border:1px solid #bdcbd7; border-radius:8px; padding:8px 9px; background:#fff; color:var(--ink); font:inherit; }
         textarea { resize:vertical; }
         .table-wrap { overflow:auto; }
