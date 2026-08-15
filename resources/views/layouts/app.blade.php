@@ -98,6 +98,10 @@
         .row-warning { background:#fff8e8; }
         .status-mapped { color:var(--green); font-weight:800; }
         .status-unmapped { color:var(--amber); font-weight:800; }
+        .price-confirm-inline { display:flex; align-items:center; gap:5px; margin-top:5px; white-space:nowrap; color:#b91c1c; }
+        .price-confirm-inline input { width:78px; padding:4px 5px; font-size:11px; }
+        .price-confirm-inline button { width:auto; margin:0; padding:4px 8px; font-size:11px; }
+        .price-confirm-inline small { font-size:10px; }
         .confirm-bar { padding:16px 18px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:14px; }
         .confirm-bar label { display:grid; gap:5px; color:#41566a; font-weight:700; }
         nav.pagination { padding:16px 20px; border-top:1px solid var(--line); }

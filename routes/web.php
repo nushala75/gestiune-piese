@@ -19,5 +19,8 @@ Route::get('/facturi-furnizori/previzualizare/produs-nou/{line}', [FacturaFurniz
 Route::post('/facturi-furnizori/previzualizare/produs-nou/{line}', [FacturaFurnizorImportController::class, 'storeNewProduct'])
     ->whereNumber('line')
     ->name('facturi-furnizori.produs-nou.store');
+Route::patch('/facturi-furnizori/previzualizare/pret/{line}', [FacturaFurnizorImportController::class, 'confirmPrice'])
+    ->whereNumber('line')
+    ->name('facturi-furnizori.pret.confirmare');
 Route::post('/facturi-furnizori/import', [FacturaFurnizorImportController::class, 'store'])->name('facturi-furnizori.store');
 Route::post('/facturi-furnizori/anulare', [FacturaFurnizorImportController::class, 'cancel'])->name('facturi-furnizori.cancel');

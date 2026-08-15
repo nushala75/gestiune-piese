@@ -275,6 +275,50 @@ class FacturaFurnizorImportController extends Controller
             ->with('status', "Produsul {$product->cod_produs} a fost creat și mapat pe poziția ".($line + 1).'.');
     }
 
+    public function confirmPrice(Request $request, int $line): RedirectResponse
+    {
+        $draft = $request->session()->get(self::SESSION_KEY);
+        if (! is_array($draft)
+            || ! hash_equals((string) ($draft['token'] ?? ''), (string) $request->input('token'))
+            || ! isset($draft['invoice']['lines'][$line])) {
+            return redirect()->route('facturi-furnizori.index')
+                ->withErrors(['factura_pdf' => 'Previzualizarea a expirat. Încarcă din nou factura.']);
+        }
+
+        $invoiceLine = $draft['invoice']['lines'][$line];
+        if (empty($invoiceLine['product_id'])) {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Poziția nu este mapată la un produs existent.']);
+        }
+
+        $data = $request->validate([
+            'token' => ['required', 'uuid'],
+            'pret_vanzare_cu_tva' => ['required', 'decimal:0,2', 'min:0'],
+        ]);
+
+        $pretFaraTva = BigDecimal::of($data['pret_vanzare_cu_tva'])
+            ->dividedBy('1.21', 4, RoundingMode::HalfUp)
+            ->__toString();
+        $product = Produs::query()->find($invoiceLine['product_id']);
+        if ($product === null) {
+            return redirect()->route('facturi-furnizori.preview')
+                ->withErrors(['lines' => 'Produsul mapat nu mai există.']);
+        }
+
+        $product->update([
+            'pret_vanzare_cu_tva' => $data['pret_vanzare_cu_tva'],
+            'pret_vanzare_fara_tva' => $pretFaraTva,
+        ]);
+
+        $draft['invoice']['lines'][$line]['current_sale_price'] = $product->pret_vanzare_cu_tva;
+        $draft['invoice']['lines'][$line]['proposed_sale_price'] = $product->pret_vanzare_cu_tva;
+        $draft['invoice']['lines'][$line]['price_warning'] = false;
+        $request->session()->put(self::SESSION_KEY, $draft);
+
+        return redirect()->route('facturi-furnizori.preview')
+            ->with('status', "Prețul produsului {$product->cod_produs} a fost actualizat.");
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $draft = $request->session()->get(self::SESSION_KEY);

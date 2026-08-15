@@ -62,7 +62,10 @@ class FacturaFurnizorImportTest extends TestCase
             ->assertSee('47 poziții detectate')
             ->assertSee('ΤΙΠ-Ε-001967')
             ->assertSee('11102-1G87-004')
-            ->assertSee('Preț propus 51.75 RON depășește prețul actual 0.00 RON')
+            ->assertSee('Preț propus')
+            ->assertSee('0.00 (preț actual)')
+            ->assertSee('name="pret_vanzare_cu_tva"', false)
+            ->assertSee('>OK</button>', false)
             ->assertSee('Taxare inversă: DA');
 
         $draft = session('factura_furnizor_import_preview');
@@ -104,6 +107,35 @@ class FacturaFurnizorImportTest extends TestCase
             'cod_furnizor' => '11192-LBA7-900',
             'observatii' => 'Atenție la recepție: prețul de vânzare cu TVA trebuie actualizat la 51.75 RON.',
         ]);
+    }
+
+    public function test_proposed_sale_price_can_be_edited_and_confirmed_immediately(): void
+    {
+        Storage::fake('local');
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', file_get_contents($this->invoicePath())),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $lineIndex = collect($draft['invoice']['lines'])
+            ->search(fn (array $line): bool => ! empty($line['product_id']) && $line['price_warning']);
+        $this->assertIsInt($lineIndex);
+        $productId = $draft['invoice']['lines'][$lineIndex]['product_id'];
+
+        $this->patch("/facturi-furnizori/previzualizare/pret/{$lineIndex}", [
+            'token' => $draft['token'],
+            'pret_vanzare_cu_tva' => '55.25',
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $this->assertDatabaseHas('produse', [
+            'id' => $productId,
+            'pret_vanzare_cu_tva' => 55.25,
+            'pret_vanzare_fara_tva' => 45.6612,
+        ]);
+        $updatedLine = session('factura_furnizor_import_preview')['invoice']['lines'][$lineIndex];
+        $this->assertSame('55.25', $updatedLine['current_sale_price']);
+        $this->assertSame('55.25', $updatedLine['proposed_sale_price']);
+        $this->assertFalse($updatedLine['price_warning']);
     }
 
     public function test_same_pdf_cannot_be_imported_twice(): void

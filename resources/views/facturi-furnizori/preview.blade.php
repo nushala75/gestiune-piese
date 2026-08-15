@@ -72,7 +72,12 @@
                                 @if($selectedProduct)
                                     <span class="status-mapped">Mapat</span>
                                     @if($line['price_warning'])
-                                        <small class="danger">Preț propus {{ $line['proposed_sale_price'] }} RON depășește prețul actual {{ number_format((float) $line['current_sale_price'], 2, '.', '') }} RON. Se va actualiza la recepție.</small>
+                                        <div class="price-confirm-inline">
+                                            <small>Preț propus</small>
+                                            <input form="price-confirm-{{ $index }}" type="number" name="pret_vanzare_cu_tva" value="{{ $line['proposed_sale_price'] }}" min="0" step="0.01" required aria-label="Preț propus cu TVA pentru {{ $line['product_label'] }}">
+                                            <small>&gt; {{ number_format((float) $line['current_sale_price'], 2, '.', '') }} (preț actual)</small>
+                                            <button form="price-confirm-{{ $index }}" type="submit">OK</button>
+                                        </div>
                                     @endif
                                 @else
                                     <a class="button-secondary" href="{{ route('facturi-furnizori.produs-nou', ['line' => $index]) }}">Produs NOU</a>
@@ -89,4 +94,14 @@
             </div>
         </section>
     </form>
+
+    @foreach($draft['invoice']['lines'] as $index => $line)
+        @if(!empty($line['product_id']) && $line['price_warning'])
+            <form id="price-confirm-{{ $index }}" method="post" action="{{ route('facturi-furnizori.pret.confirmare', ['line' => $index]) }}">
+                @csrf
+                @method('patch')
+                <input type="hidden" name="token" value="{{ $draft['token'] }}">
+            </form>
+        @endif
+    @endforeach
 @endsection
