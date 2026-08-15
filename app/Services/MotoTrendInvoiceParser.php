@@ -132,7 +132,7 @@ class MotoTrendInvoiceParser
         $amount = $this->decimal($match[4]);
         $middle = trim($match[5]);
         if (preg_match(
-            '/^(?<code>[A-Z0-9]+(?:-[A-Z0-9]+)+)\d+,\d{2}\s+(?<description>.+)\k<code>$/u',
+            '/^(?<code>\S+?)\d+,\d{2}\s+(?<description>.+)\k<code>$/u',
             $middle,
             $descriptionMatch,
         ) !== 1) {
@@ -141,9 +141,7 @@ class MotoTrendInvoiceParser
 
         $supplierCode = trim($descriptionMatch['code']);
         $description = trim($descriptionMatch['description']);
-        $valid = $quantity > 0
-            && $description !== ''
-            && preg_match('/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/', $supplierCode) === 1;
+        $valid = $quantity > 0 && $supplierCode !== '' && $description !== '';
 
         return [
             'line_number' => $lineNumber,

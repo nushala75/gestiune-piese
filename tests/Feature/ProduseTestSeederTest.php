@@ -178,7 +178,7 @@ class ProduseTestSeederTest extends TestCase
             ->assertDontSee('name="cod_fgo"', false);
 
         $this->patch("/produse/{$produs->id}/detalii", [
-            'cod_produs' => '11102-1g87-004-x',
+            'cod_produs' => 'special/2026 test',
             'denumire_engleza' => 'rub bush updated',
             'descriere_romana' => 'Bucșă actualizată',
             'categorie_id' => $categorie->id,
@@ -199,7 +199,7 @@ class ProduseTestSeederTest extends TestCase
 
         $this->assertDatabaseHas('produse', [
             'id' => $produs->id,
-            'cod_produs' => '11102-1G87-004-X',
+            'cod_produs' => 'SPECIAL/2026 TEST',
             'denumire_engleza' => 'RUB BUSH UPDATED',
             'descriere_romana' => 'Bucșă actualizată',
             'categorie_id' => $categorie->id,

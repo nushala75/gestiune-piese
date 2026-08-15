@@ -9,6 +9,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - `produse.cod_fgo` are 8 cifre si este unic.
 - Codurile generate local folosesc intervalul `01000000`-`08999999`. Valoarea `09000000` marcheaza secventa epuizata si nu se aloca unui produs.
 - `produse.cod_produs` ramane separat de `cod_fgo`.
+- Structura convenita a codului de produs se foloseste numai la filtrarea bazei initiale. Aplicatia accepta orice cod nevid de maximum 64 de caractere; unicitatea se verifica independent de format.
 - Preturile de vanzare sunt pastrate in `produse`, in RON.
 - Pretul de intrare si moneda furnizorului sunt pastrate in `produse_furnizori`; pretul de intrare are 4 zecimale.
 - Toate cantitatile sunt numere intregi (`BIGINT`): stoc minim, linii de factura si receptie, miscari si solduri de stoc, respectiv liniile exportului FGO.

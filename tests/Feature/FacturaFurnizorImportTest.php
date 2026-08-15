@@ -50,6 +50,18 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertSame('94511-14000', $result['lines'][46]['supplier_code']);
     }
 
+    public function test_parser_accepts_a_supplier_code_without_the_initial_database_pattern(): void
+    {
+        $parser = new MotoTrendInvoiceParser(new Parser);
+        $method = new \ReflectionMethod($parser, 'parseLine');
+        $line = $method->invoke($parser, '2 10,00 0,00 20,00SPECIAL/2026#A10,00 SPECIAL PRODUCTSPECIAL/2026#A', 1);
+
+        $this->assertIsArray($line);
+        $this->assertTrue($line['valid']);
+        $this->assertSame('SPECIAL/2026#A', $line['supplier_code']);
+        $this->assertSame('SPECIAL PRODUCT', $line['description']);
+    }
+
     public function test_invoice_is_previewed_then_saved_with_automatic_mappings(): void
     {
         Storage::fake('local');
@@ -186,9 +198,10 @@ class FacturaFurnizorImportTest extends TestCase
         $categoryId = DB::table('categorii')->where('denumire', 'Pe comanda')->value('id');
         $unitId = DB::table('unitati_masura')->where('cod', 'BUC')->value('id');
 
+        $customProductCode = 'special/2026 test';
         $this->post("/facturi-furnizori/previzualizare/produs-nou/{$lineIndex}", [
             'token' => $draft['token'],
-            'cod_produs' => $line['supplier_code'],
+            'cod_produs' => $customProductCode,
             'denumire_engleza' => $line['description'],
             'descriere_romana' => 'Produs creat din factura',
             'categorie_id' => $categoryId,
@@ -205,11 +218,12 @@ class FacturaFurnizorImportTest extends TestCase
             'activ' => 1,
         ])->assertRedirect('/facturi-furnizori/previzualizare');
 
-        $productId = DB::table('produse')->where('cod_produs', $line['supplier_code'])->value('id');
+        $productId = DB::table('produse')->where('cod_produs', mb_strtoupper($customProductCode))->value('id');
         $this->assertNotNull($productId);
         $this->assertDatabaseHas('produse', [
             'id' => $productId,
             'cod_fgo' => '01000000',
+            'cod_produs' => 'SPECIAL/2026 TEST',
             'pret_vanzare_cu_tva' => $line['proposed_sale_price'],
             'cota_tva' => 21,
             'activ' => 1,

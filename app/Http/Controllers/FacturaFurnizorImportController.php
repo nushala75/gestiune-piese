@@ -188,7 +188,7 @@ class FacturaFurnizorImportController extends Controller
 
         $data = $request->validate([
             'token' => ['required', 'uuid'],
-            'cod_produs' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i', Rule::unique('produse', 'cod_produs')],
+            'cod_produs' => ['required', 'string', 'max:64', Rule::unique('produse', 'cod_produs')],
             'denumire_engleza' => ['required', 'string', 'max:255'],
             'descriere_romana' => ['nullable', 'string'],
             'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
@@ -379,7 +379,7 @@ class FacturaFurnizorImportController extends Controller
         }
 
         $data = $request->validate([
-            'cod_produs' => ['required', 'string', 'max:64', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i', Rule::unique('produse', 'cod_produs')],
+            'cod_produs' => ['required', 'string', 'max:64', Rule::unique('produse', 'cod_produs')],
             'denumire_engleza' => ['required', 'string', 'max:255'],
             'descriere_romana' => ['nullable', 'string'],
             'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
@@ -555,13 +555,11 @@ class FacturaFurnizorImportController extends Controller
         $validated = $request->validate([
             'token' => ['required', 'uuid'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.supplier_code' => ['required', 'string', 'max:100', 'regex:/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/i'],
+            'lines.*.supplier_code' => ['required', 'string', 'max:100'],
             'lines.*.description' => ['required', 'string', 'max:500'],
             'lines.*.quantity' => ['required', 'integer', 'min:1'],
             'lines.*.amount' => ['required', 'decimal:0,2', 'min:0.01'],
             'lines.*.product_id' => ['nullable', 'integer', Rule::exists('produse', 'id')],
-        ], [
-            'lines.*.supplier_code.regex' => 'Un cod de produs nu respectă structura MOTO TREND.',
         ]);
 
         $invoice = $draft['invoice'];
