@@ -12,7 +12,7 @@ use Throwable;
 
 class SagaExportController extends Controller
 {
-    public function generate(FacturaFurnizor $factura, SagaInvoiceXmlExporter $exporter): RedirectResponse
+    public function generate(FacturaFurnizor $factura, SagaInvoiceXmlExporter $exporter): RedirectResponse|StreamedResponse
     {
         try {
             $export = $exporter->export($factura);
@@ -40,16 +40,7 @@ class SagaExportController extends Controller
             return back()->withErrors(['saga' => 'XML-ul SAGA nu a putut fi generat: '.$exception->getMessage()]);
         }
 
-        return redirect()->route('facturi-furnizori.show', $factura)
-            ->with('status', 'XML-ul pentru SAGA a fost generat și salvat pe server.');
-    }
-
-    public function download(FacturaFurnizor $factura, ExportSaga $export): StreamedResponse
-    {
-        abort_unless($export->factura_id === $factura->id, 404);
-        abort_unless(Storage::disk('local')->exists($export->cale_stocare), 404);
-
-        return Storage::disk('local')->download($export->cale_stocare, $export->nume_fisier, [
+        return Storage::disk('local')->download($path, $export['filename'], [
             'Content-Type' => 'application/xml; charset=UTF-8',
         ]);
     }
