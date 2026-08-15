@@ -24,7 +24,7 @@
         <h2>Acces rapid</h2>
         <div class="quick-grid">
             <a href="{{ route('produse.index') }}"><strong>Vezi produsele</strong><br><small>Coduri FGO, prețuri și stoc</small></a>
-            <span><strong>Importă o factură</strong><br><small>Disponibil în etapa următoare</small></span>
+            <a href="{{ route('facturi-furnizori.index') }}"><strong>Importă o factură</strong><br><small>PDF MOTO-TREND cu previzualizare</small></a>
             <span><strong>Generează export SAGA</strong><br><small>Disponibil după maparea facturii</small></span>
         </div>
     </section>

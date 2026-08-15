@@ -16,6 +16,11 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Tipul contabil SAGA `Marfuri gestiune 1 firma` este o regula fixa de export, nu o coloana duplicata in `produse`.
 - Stocul este explicat prin `miscari_stoc`; `solduri_stoc` este soldul operational actualizat tranzactional.
 - Amount-ul liniei MOTO TREND ramane sursa de adevar. Pretul calculat are precizie extinsa.
+- Importul PDF MOTO TREND se face in doi pasi: previzualizare/editare, apoi confirmare si salvare.
+- Facturile MOTO TREND au TVA 0 si taxare inversa activa. Produsele au cota TVA 21%.
+- Pentru un produs nou, pretul de vanzare cu TVA propus este pretul de intrare EUR inmultit cu 2,18, rotunjit la 2 zecimale. Produsul ramane inactiv pana cand pretul este verificat sau editat si campul `activ` este bifat.
+- Pentru un produs existent, pretul de intrare se actualizeaza in EUR. Pretul de vanzare ramane neschimbat daca `pret_intrare * 2,18` nu il depaseste; in caz contrar aplicatia avertizeaza si propune valoarea mai mare.
+- Importul facturii nu modifica stocul si nu aplica preturile produselor. Cantitatile si preturile se actualizeaza numai la etapa `Receptie`, dupa confirmarea importului SAGA.
 - Egalitatea `Amount = cantitate * pret_unitar_calculat` se verifica in serviciul de import folosind aritmetica zecimala; nu este impusa printr-un CHECK SQL sensibil la rotunjire.
 - Importul FGO ramane cu `mod_actualizare` NULL pana la verificarea sensului coloanei Cantitate.
 - Accesul SAGA nu este automatizat de schema bazei si necesita confirmare prealabila.

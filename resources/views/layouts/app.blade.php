@@ -81,6 +81,25 @@
         .notice { margin-bottom:20px; padding:14px 16px; border-radius:10px; background:#fff6df; color:#765018; border:1px solid #f2d598; }
         .notice ul { margin:8px 0 0; }
         .success { margin-bottom:20px; padding:14px 16px; border-radius:10px; background:#e8f7f1; color:#126148; border:1px solid #abdcca; }
+        .danger { color:#9b2c2c; font-weight:700; }
+        .import-form { padding:20px; display:flex; flex-wrap:wrap; align-items:end; gap:12px; }
+        .import-form label { display:grid; gap:5px; min-width:min(100%,420px); color:#41566a; font-weight:700; }
+        .import-form input[type=file] { width:100%; }
+        .invoice-summary { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:18px; }
+        .invoice-summary div { padding:12px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+        .invoice-summary small, .invoice-summary strong { display:block; }
+        .invoice-summary small { color:var(--muted); }
+        .preview-table input, .preview-table select { padding:5px 6px; font-size:11px; }
+        .preview-table .code-input { width:142px; }
+        .preview-table .description-input { width:260px; }
+        .preview-table .quantity-input { width:58px; }
+        .preview-table .amount-input { width:82px; text-align:right; }
+        .preview-table .product-select { width:250px; }
+        .row-warning { background:#fff8e8; }
+        .status-mapped { color:var(--green); font-weight:800; }
+        .status-unmapped { color:var(--amber); font-weight:800; }
+        .confirm-bar { padding:16px 18px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:14px; }
+        .confirm-bar label { display:grid; gap:5px; color:#41566a; font-weight:700; }
         nav.pagination { padding:16px 20px; border-top:1px solid var(--line); }
         nav.pagination svg { width:18px; }
         @media (max-width:900px) { .shell{grid-template-columns:1fr}.sidebar{padding:16px}.menu{grid-template-columns:repeat(2,1fr)}.topbar{padding:0 18px}.content{padding:22px 18px}.cards{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.page-head{align-items:stretch;flex-direction:column}.search{width:100%}input[type=search]{min-width:0;flex:1}.company{display:none}.form-grid{grid-template-columns:1fr} }
@@ -96,7 +115,7 @@
         <nav class="menu" aria-label="Meniu principal">
             <a href="{{ route('dashboard') }}" @class(['active' => request()->routeIs('dashboard')])>Panou principal</a>
             <a href="{{ route('produse.index') }}" @class(['active' => request()->routeIs('produse.*')])>Produse</a>
-            <span>Facturi furnizori <b class="badge-soon">în curând</b></span>
+            <a href="{{ route('facturi-furnizori.index') }}" @class(['active' => request()->routeIs('facturi-furnizori.*')])>Facturi furnizori</a>
             <span>Recepții <b class="badge-soon">în curând</b></span>
             <span>Stoc <b class="badge-soon">în curând</b></span>
             <span>Export SAGA <b class="badge-soon">în curând</b></span>
