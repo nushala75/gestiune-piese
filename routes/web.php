@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaFurnizorImportController;
+use App\Http\Controllers\FurnizorController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\ReceptieController;
 use App\Http\Controllers\SagaExportController;
@@ -25,6 +26,11 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/produse/{produs}/detalii', [ProdusController::class, 'editDetalii'])->name('produse.edit-detalii');
     Route::patch('/produse/{produs}/detalii', [ProdusController::class, 'updateDetalii'])->name('produse.update-detalii');
     Route::delete('/produse/{produs}', [ProdusController::class, 'destroy'])->name('produse.destroy');
+    Route::get('/furnizori', [FurnizorController::class, 'index'])->name('furnizori.index');
+    Route::get('/furnizori/adauga', [FurnizorController::class, 'create'])->name('furnizori.create');
+    Route::post('/furnizori', [FurnizorController::class, 'store'])->name('furnizori.store');
+    Route::get('/furnizori/{furnizor}/editare', [FurnizorController::class, 'edit'])->name('furnizori.edit');
+    Route::patch('/furnizori/{furnizor}', [FurnizorController::class, 'update'])->name('furnizori.update');
     Route::get('/facturi-furnizori', [FacturaFurnizorImportController::class, 'index'])->name('facturi-furnizori.index');
     Route::post('/facturi-furnizori/incarcare', [FacturaFurnizorImportController::class, 'upload'])->name('facturi-furnizori.upload');
     Route::post('/facturi-furnizori/storno/incarcare', [FacturaFurnizorImportController::class, 'uploadStorno'])->name('facturi-furnizori.storno.upload');

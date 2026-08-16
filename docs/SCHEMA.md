@@ -40,7 +40,7 @@ Aceasta migrare acopera prima functionalitate confirmata: factura furnizor -> ma
 - Cand stocul scade sub `stoc_minim`, `cantitate_de_comandat` devine cel putin egala cu `stoc_minim`. O valoare manuala mai mare se pastreaza; la revenirea stocului la minimum sau peste, cantitatea se reseteaza la 0.
 - Storno poate contine numai o parte dintre produsele unei facturi anterioare. Produsele noi sunt interzise: maparea automata sau manuala poate folosi numai produse care au deja o mapare pentru furnizorul documentului.
 - Receptia storno necesita aceeasi confirmare manuala SAGA, este definitiva si nu modifica ultimul pret de intrare al produsului.
-- Furnizori confirmati suplimentar: `Scootercraft S.O.O` (`PL6793242148`, Polonia, EUR) si `RACING PLANET Vertrieb GmbH` (`DE297237364`, Germania, EUR). Produsele lor se mapeaza numai la importul facturilor de test, dupa confirmarea eventualelor egalitati.
+- Furnizori confirmati: `MOTO TREND S.A` (`EL094496688`, Grecia), `Scootercraft S.O.O` (`PL6793242148`, Polonia), `RACING PLANET Vertrieb GmbH` (`DE297237364`, Germania) si `MICHALIS GEORGIOU MOTOSPEED LTD` (`10089694`, Cipru). Moneda implicita este EUR. Modulul Furnizori permite administrarea denumirii, VAT-ului, tarii, adresei si starii activ/inactiv.
 - Egalitatea `Amount = cantitate * pret_unitar_calculat` se verifica in serviciul de import folosind aritmetica zecimala; nu este impusa printr-un CHECK SQL sensibil la rotunjire.
 - Importul FGO ramane cu `mod_actualizare` NULL pana la verificarea sensului coloanei Cantitate.
 - Accesul SAGA nu este automatizat de schema bazei si necesita confirmare prealabila.

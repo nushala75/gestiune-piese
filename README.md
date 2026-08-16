@@ -17,6 +17,7 @@ Ordinea curentă:
 7. `007_furnizori_si_linii_cost.sql`
 8. `008_cod_produs_neunic.sql`
 9. `009_autentificare_admin.sql`
+10. `010_modul_furnizori.sql`
 
 După aplicarea migrării `009`, accesează `/configurare-administrator` și setează parola pentru administratorul unic `nusescu@gmail.com`. Pagina devine indisponibilă după crearea utilizatorului. Nu există înregistrare publică sau recuperare de parolă în această versiune.
 
@@ -50,8 +51,10 @@ Fișierul sursă verificat este `database/data/baza_produse_imbunatatita.csv`. C
 
 - `/` — panou principal;
 - `/produse` — catalog, căutare, prețuri și stoc.
+- `/furnizori` — administrarea furnizorilor, adreselor și stării activ/inactiv;
+- `/facturi-furnizori` — import, mapare și recepție facturi furnizori.
 
-Modulele Facturi furnizori, Recepții, Export SAGA și Export FGO sunt afișate în meniu ca funcții viitoare.
+Exportul FGO și jurnalul de audit rămân funcții viitoare.
 
 ## Deploy prin Git
 

@@ -132,6 +132,7 @@
         <nav class="menu" aria-label="Meniu principal">
             <a href="{{ route('dashboard') }}" @class(['active' => request()->routeIs('dashboard')])>Panou principal</a>
             <a href="{{ route('produse.index') }}" @class(['active' => request()->routeIs('produse.*')])>Produse</a>
+            <a href="{{ route('furnizori.index') }}" @class(['active' => request()->routeIs('furnizori.*')])>Furnizori</a>
             <a href="{{ route('facturi-furnizori.index') }}" @class(['active' => request()->routeIs('facturi-furnizori.*')])>Facturi furnizori</a>
             <span>Recepții</span>
             <span>Stoc <b class="badge-soon">în curând</b></span>
