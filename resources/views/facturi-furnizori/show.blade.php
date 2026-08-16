@@ -70,6 +70,23 @@
         </section>
     </form>
 
+    @if($factura->status !== 'import_partial')
+        <section class="panel" style="margin-top:14px">
+            <div class="panel-head"><h2>Export SAGA</h2></div>
+            <p><strong>Ordinea este obligatorie:</strong> importă mai întâi nomenclatorul de articole în SAGA, apoi factura.</p>
+            <div class="form-actions">
+                <form method="post" action="{{ route('facturi-furnizori.export-saga-articole', $factura) }}">
+                    @csrf
+                    <button type="submit">1. Generează XML articole SAGA</button>
+                </form>
+                <form method="post" action="{{ route('facturi-furnizori.export-saga-factura', $factura) }}" onsubmit="return confirm('Ai importat deja XML-ul de articole în SAGA?');">
+                    @csrf
+                    <button type="submit">2. Generează XML factura SAGA</button>
+                </form>
+            </div>
+        </section>
+    @endif
+
     <div class="form-actions" style="margin-top:14px">
         @if(!$factura->receptie && $factura->status === 'import_partial')
             <form method="post" action="{{ route('facturi-furnizori.finalizare', $factura) }}">
@@ -79,12 +96,6 @@
         @endif
         @if(!$factura->receptie && $factura->status === 'import_finalizat')
             <a @class(['button-secondary', 'button-danger' => $factura->tip_document === 'storno']) href="{{ route('receptii.create', $factura) }}">{{ $factura->tip_document === 'storno' ? 'Recepție storno' : 'Recepție' }}</a>
-        @endif
-        @if($factura->status !== 'import_partial')
-            <form method="post" action="{{ route('facturi-furnizori.export-saga', $factura) }}">
-                @csrf
-                <button type="submit">Generează XML SAGA</button>
-            </form>
         @endif
         @if($factura->receptie)
             <span class="pill">Recepționată la {{ $factura->receptie->data_receptie->format('d.m.Y') }} · definitiv</span>
