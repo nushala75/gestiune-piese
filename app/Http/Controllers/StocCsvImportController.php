@@ -45,7 +45,7 @@ class StocCsvImportController extends Controller
             ->get();
 
         $produsePeCod = $produse->groupBy(fn (Produs $produs): string => $this->normalizeazaCod($produs->cod_produs));
-        $coduriCsv = array_fill_keys(array_keys($cantitatiCsv), true);
+        $coduriPrezenteCsv = array_fill_keys($raportCitire['coduri_prezente'], true);
 
         $produseNoi = [];
         $coduriAmbigue = [];
@@ -56,7 +56,7 @@ class StocCsvImportController extends Controller
 
         DB::transaction(function () use (
             $cantitatiCsv,
-            $coduriCsv,
+            $coduriPrezenteCsv,
             $gestiune,
             $necesarAprovizionare,
             $produse,
@@ -110,7 +110,7 @@ class StocCsvImportController extends Controller
 
             foreach ($produse as $produs) {
                 $cod = $this->normalizeazaCod($produs->cod_produs);
-                if (isset($coduriCsv[$cod])) {
+                if (isset($coduriPrezenteCsv[$cod])) {
                     continue;
                 }
 
@@ -155,7 +155,7 @@ class StocCsvImportController extends Controller
     }
 
     /**
-     * @return array{0: array<string, int>, 1: array{randuri_date:int, duplicate_csv:array<int, array{cod:string, linie:int}>, randuri_invalide:array<int, array{linie:int, motiv:string}>}}
+     * @return array{0: array<string, int>, 1: array{randuri_date:int, coduri_prezente:array<int, string>, duplicate_csv:array<int, array{cod:string, linie:int}>, randuri_invalide:array<int, array{linie:int, motiv:string}>}}
      */
     private function citesteCsv(string $cale): array
     {
@@ -169,6 +169,7 @@ class StocCsvImportController extends Controller
         $delimiter = $this->detecteazaDelimiter($primaLinie ?: '');
 
         $cantitati = [];
+        $coduriPrezente = [];
         $duplicateCsv = [];
         $coduriDuplicate = [];
         $randuriInvalide = [];
@@ -196,6 +197,7 @@ class StocCsvImportController extends Controller
                 continue;
             }
 
+            $coduriPrezente[$cod] = true;
             $cantitateNormalizata = str_replace(',', '.', $cantitateBruta);
             if (! is_numeric($cantitateNormalizata)) {
                 $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitate invalidă pentru {$cod}."];
@@ -228,6 +230,7 @@ class StocCsvImportController extends Controller
 
         return [$cantitati, [
             'randuri_date' => $randuriDate,
+            'coduri_prezente' => array_keys($coduriPrezente),
             'duplicate_csv' => $duplicateCsv,
             'randuri_invalide' => $randuriInvalide,
         ]];
