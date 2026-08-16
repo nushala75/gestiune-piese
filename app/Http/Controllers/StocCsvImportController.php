@@ -87,7 +87,8 @@ class StocCsvImportController extends Controller
                 }
 
                 $produs = $potriviri->first();
-                $stocCurent = (int) ($produs->solduriStoc->first()?->cantitate_fizica ?? 0);
+                $sold = $produs->solduriStoc->first();
+                $stocCurent = (int) ($sold?->cantitate_fizica ?? 0);
 
                 if ($stocCurent === $cantitate) {
                     $neschimbate++;
@@ -98,7 +99,7 @@ class StocCsvImportController extends Controller
                     ['gestiune_id' => $gestiune->id, 'produs_id' => $produs->id],
                     [
                         'cantitate_fizica' => $cantitate,
-                        'cantitate_rezervata' => DB::raw('COALESCE(cantitate_rezervata, 0)'),
+                        'cantitate_rezervata' => (int) ($sold?->cantitate_rezervata ?? 0),
                         'updated_at' => now(),
                     ],
                 );
@@ -113,7 +114,8 @@ class StocCsvImportController extends Controller
                     continue;
                 }
 
-                $stocCurent = (int) ($produs->solduriStoc->first()?->cantitate_fizica ?? 0);
+                $sold = $produs->solduriStoc->first();
+                $stocCurent = (int) ($sold?->cantitate_fizica ?? 0);
                 if ($stocCurent === 0) {
                     continue;
                 }
@@ -122,7 +124,7 @@ class StocCsvImportController extends Controller
                     ['gestiune_id' => $gestiune->id, 'produs_id' => $produs->id],
                     [
                         'cantitate_fizica' => 0,
-                        'cantitate_rezervata' => DB::raw('COALESCE(cantitate_rezervata, 0)'),
+                        'cantitate_rezervata' => (int) ($sold?->cantitate_rezervata ?? 0),
                         'updated_at' => now(),
                     ],
                 );
@@ -168,6 +170,7 @@ class StocCsvImportController extends Controller
 
         $cantitati = [];
         $duplicateCsv = [];
+        $coduriDuplicate = [];
         $randuriInvalide = [];
         $randuriDate = 0;
         $linie = 0;
@@ -195,25 +198,26 @@ class StocCsvImportController extends Controller
 
             $cantitateNormalizata = str_replace(',', '.', $cantitateBruta);
             if (! is_numeric($cantitateNormalizata)) {
-                $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitate invalidă pentru {$cod}." ];
+                $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitate invalidă pentru {$cod}."];
                 continue;
             }
 
             $cantitateNumerica = (float) $cantitateNormalizata;
             if (floor($cantitateNumerica) !== $cantitateNumerica) {
-                $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitatea pentru {$cod} trebuie să fie număr întreg." ];
+                $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitatea pentru {$cod} trebuie să fie număr întreg."];
                 continue;
             }
 
             $cantitate = max(0, (int) $cantitateNumerica);
 
-            if (array_key_exists($cod, $cantitati)) {
-                unset($cantitati[$cod]);
-                $duplicateCsv[] = ['cod' => $cod, 'linie' => $linie];
+            if (isset($coduriDuplicate[$cod])) {
                 continue;
             }
 
-            if (collect($duplicateCsv)->contains('cod', $cod)) {
+            if (array_key_exists($cod, $cantitati)) {
+                unset($cantitati[$cod]);
+                $coduriDuplicate[$cod] = true;
+                $duplicateCsv[] = ['cod' => $cod, 'linie' => $linie];
                 continue;
             }
 
