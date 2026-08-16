@@ -7,6 +7,7 @@ use App\Http\Controllers\FurnizorController;
 use App\Http\Controllers\ProdusController;
 use App\Http\Controllers\ReceptieController;
 use App\Http\Controllers\SagaExportController;
+use App\Http\Controllers\StocCsvImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -22,6 +23,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/produse', [ProdusController::class, 'index'])->name('produse.index');
     Route::get('/produse/adauga', [ProdusController::class, 'create'])->name('produse.create');
     Route::post('/produse', [ProdusController::class, 'store'])->name('produse.store');
+    Route::post('/produse/actualizare-stoc', [StocCsvImportController::class, 'store'])->name('produse.actualizare-stoc');
     Route::patch('/produse/{produs}/editare-rapida', [ProdusController::class, 'updateRapid'])->name('produse.update-rapid');
     Route::get('/produse/{produs}/detalii', [ProdusController::class, 'editDetalii'])->name('produse.edit-detalii');
     Route::patch('/produse/{produs}/detalii', [ProdusController::class, 'updateDetalii'])->name('produse.update-detalii');
