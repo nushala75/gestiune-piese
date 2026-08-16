@@ -29,6 +29,11 @@
 
         <div class="form-grid">
             <label>
+                <span>Cod FGO</span>
+                <input type="text" name="cod_fgo" value="{{ old('cod_fgo', $produs->cod_fgo) }}" required minlength="8" maxlength="8" inputmode="numeric" pattern="[0-9]{8}">
+                <small>Unic, exact 8 cifre.</small>
+            </label>
+            <label>
                 <span>Cod produs</span>
                 <input type="text" name="cod_produs" value="{{ old('cod_produs', $produs->cod_produs) }}" required maxlength="64">
             </label>
