@@ -220,6 +220,11 @@ class ProdusController extends Controller
             ->first();
 
         $date = $request->validate([
+            'cod_fgo' => [
+                'required',
+                'digits:8',
+                Rule::unique('produse', 'cod_fgo')->ignore($produs),
+            ],
             'cod_produs' => [
                 'required',
                 'string',
@@ -244,6 +249,9 @@ class ProdusController extends Controller
             'inaltime_cm' => ['nullable', 'required_if:voluminos,1', 'decimal:0,2', 'min:0'],
             'activ' => ['required', 'boolean'],
         ], [
+            'cod_fgo.required' => 'Codul FGO este obligatoriu.',
+            'cod_fgo.digits' => 'Codul FGO trebuie să conțină exact 8 cifre.',
+            'cod_fgo.unique' => 'Codul FGO este deja folosit de alt produs.',
             'denumire_engleza.required' => 'Description of Goods este obligatorie pentru salvarea produsului.',
         ]);
 
@@ -258,6 +266,7 @@ class ProdusController extends Controller
 
         DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $pretFaraTva, $produs): void {
             $produs->update([
+                'cod_fgo' => trim($date['cod_fgo']),
                 'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
                 'denumire_engleza' => mb_strtoupper(trim($date['denumire_engleza'])),
                 'descriere_romana' => filled($date['descriere_romana'] ?? null)
