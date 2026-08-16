@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaFurnizorImportController;
 use App\Http\Controllers\FurnizorController;
 use App\Http\Controllers\ProdusController;
+use App\Http\Controllers\ProdusDetaliiUpdateController;
 use App\Http\Controllers\ReceptieController;
 use App\Http\Controllers\SagaExportController;
 use App\Http\Controllers\StocCsvImportController;
@@ -26,7 +27,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/produse/actualizare-stoc', [StocCsvImportController::class, 'store'])->name('produse.actualizare-stoc');
     Route::patch('/produse/{produs}/editare-rapida', [ProdusController::class, 'updateRapid'])->name('produse.update-rapid');
     Route::get('/produse/{produs}/detalii', [ProdusController::class, 'editDetalii'])->name('produse.edit-detalii');
-    Route::patch('/produse/{produs}/detalii', [ProdusController::class, 'updateDetalii'])->name('produse.update-detalii');
+    Route::patch('/produse/{produs}/detalii', ProdusDetaliiUpdateController::class)->name('produse.update-detalii');
     Route::delete('/produse/{produs}', [ProdusController::class, 'destroy'])->name('produse.destroy');
     Route::get('/furnizori', [FurnizorController::class, 'index'])->name('furnizori.index');
     Route::get('/furnizori/adauga', [FurnizorController::class, 'create'])->name('furnizori.create');
