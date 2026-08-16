@@ -105,18 +105,37 @@ class FacturaFurnizorImportController extends Controller
             ->get()
             ->keyBy(fn ($mapping) => mb_strtoupper($mapping->cod_furnizor)) ?? collect();
 
+        $supplierCodes = collect($invoice['lines'])
+            ->pluck('supplier_code')
+            ->map(fn ($code): string => mb_strtoupper(trim((string) $code)))
+            ->filter()
+            ->unique()
+            ->values();
+        $catalogProducts = $tipDocument === 'storno'
+            ? collect()
+            : Produs::query()
+                ->whereIn('cod_produs', $supplierCodes)
+                ->get()
+                ->groupBy(fn (Produs $product): string => mb_strtoupper(trim($product->cod_produs)))
+                ->filter(fn ($products): bool => $products->count() === 1)
+                ->map(fn ($products): Produs => $products->first());
+
         foreach ($invoice['lines'] as &$line) {
-            $mapping = $mappings->get(mb_strtoupper((string) $line['supplier_code']));
-            $line['product_id'] = $mapping?->produs_id;
-            $line['product_label'] = $mapping?->produs
-                ? $mapping->produs->cod_produs.' '.$mapping->produs->denumire_engleza
+            $normalizedCode = mb_strtoupper(trim((string) $line['supplier_code']));
+            $mapping = $mappings->get($normalizedCode);
+            $catalogProduct = $mapping === null ? $catalogProducts->get($normalizedCode) : null;
+            $matchedProduct = $mapping?->produs ?? $catalogProduct;
+            $line['product_id'] = $matchedProduct?->id;
+            $line['product_label'] = $matchedProduct
+                ? $matchedProduct->cod_produs.' '.$matchedProduct->denumire_engleza
                 : null;
-            $line['current_sale_price'] = $tipDocument === 'storno' ? null : $mapping?->produs?->pret_vanzare_cu_tva;
+            $line['auto_catalog_match'] = $mapping === null && $catalogProduct !== null;
+            $line['current_sale_price'] = $tipDocument === 'storno' ? null : $matchedProduct?->pret_vanzare_cu_tva;
             $line['proposed_sale_price'] = $tipDocument !== 'storno' && $line['unit_price'] !== ''
                 ? BigDecimal::of($line['unit_price'])->multipliedBy(self::SALE_PRICE_MULTIPLIER)->toScale(2, RoundingMode::HalfUp)->__toString()
                 : null;
             $line['price_warning'] = $tipDocument !== 'storno'
-                && $mapping?->produs !== null
+                && $matchedProduct !== null
                 && $line['proposed_sale_price'] !== null
                 && ($line['current_sale_price'] === null
                     || BigDecimal::of($line['proposed_sale_price'])->isGreaterThan($line['current_sale_price']));
@@ -751,6 +770,23 @@ class FacturaFurnizorImportController extends Controller
                             ? 'Selectează un produs existent, deja mapat la furnizor.'
                             : 'Produsul necesită mapare manuală.')),
                     ]);
+
+                    if ($tipLinie === 'produs' && $line['product_id'] && ($draft['tip_document'] ?? 'factura') !== 'storno') {
+                        $mapping = ProdusFurnizor::query()->firstOrNew([
+                            'furnizor_id' => $supplier->id,
+                            'cod_furnizor' => mb_strtoupper(trim($line['supplier_code'])),
+                        ]);
+                        $draftProductId = $invoice['lines'][$index]['product_id'] ?? null;
+                        $automaticCatalogMatch = (bool) ($invoice['lines'][$index]['auto_catalog_match'] ?? false)
+                            && (int) $draftProductId === (int) $line['product_id'];
+                        if (! $mapping->exists || (int) $mapping->produs_id !== (int) $line['product_id']) {
+                            $mapping->produs_id = $line['product_id'];
+                            $mapping->confirmata_manual = ! $automaticCatalogMatch;
+                        }
+                        $mapping->denumire_furnizor = trim($line['description']);
+                        $mapping->moneda = $invoice['currency'];
+                        $mapping->save();
+                    }
                 }
 
                 if (! Storage::disk('local')->move($temporaryPath, $finalPath)) {

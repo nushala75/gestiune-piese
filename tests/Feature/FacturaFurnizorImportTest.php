@@ -78,6 +78,71 @@ class FacturaFurnizorImportTest extends TestCase
         $this->assertSame('Description of Goods lipsește. Completează descrierea înainte de salvare.', $line['error']);
     }
 
+    public function test_unique_catalog_code_is_mapped_without_an_existing_supplier_mapping(): void
+    {
+        Storage::fake('local');
+        $productId = DB::table('produse')->where('cod_produs', '11102-1G87-004')->value('id');
+        DB::table('produse_furnizori')->where('produs_id', $productId)->delete();
+        DB::table('produse')->where('id', $productId)->update([
+            'cod_produs' => '13011-KFBF-E0A',
+            'denumire_engleza' => 'RING ASSY PISTON',
+        ]);
+
+        $this->mock(MotoTrendInvoiceParser::class, function ($mock): void {
+            $mock->shouldReceive('parse')->once()->andReturn([
+                'supplier_vat' => 'EL094496688',
+                'customer_vat' => 'RO20548513',
+                'invoice_number' => 'TEST-CATALOG-MATCH',
+                'invoice_date' => '2026-08-13',
+                'currency' => 'EUR',
+                'total_amount' => '48.24',
+                'total_quantity' => 3,
+                'lines' => [[
+                    'line_number' => 1,
+                    'supplier_code' => '13011-KFBF-E0A',
+                    'description' => "RING ASS'Y PISTON",
+                    'quantity' => 3,
+                    'amount' => '48.24',
+                    'unit_price' => '16.0800',
+                    'valid' => true,
+                    'error' => null,
+                    'source' => '',
+                ]],
+            ]);
+        });
+
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', '%PDF-test'),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $draft = session('factura_furnizor_import_preview');
+        $this->assertSame($productId, $draft['invoice']['lines'][0]['product_id']);
+        $this->assertTrue($draft['invoice']['lines'][0]['auto_catalog_match']);
+
+        $this->post('/facturi-furnizori/import', [
+            'token' => $draft['token'],
+            'lines' => [[
+                'supplier_code' => '13011-KFBF-E0A',
+                'description' => "RING ASS'Y PISTON",
+                'quantity' => 3,
+                'amount' => '48.24',
+                'product_id' => $productId,
+            ]],
+        ])->assertRedirect('/facturi-furnizori');
+
+        $supplierId = DB::table('furnizori')->where('cod_fiscal', 'EL094496688')->value('id');
+        $this->assertDatabaseHas('produse_furnizori', [
+            'furnizor_id' => $supplierId,
+            'produs_id' => $productId,
+            'cod_furnizor' => '13011-KFBF-E0A',
+            'confirmata_manual' => false,
+        ]);
+        $this->assertDatabaseHas('facturi_furnizor', [
+            'numar_original' => 'TEST-CATALOG-MATCH',
+            'status' => 'import_finalizat',
+        ]);
+    }
+
     public function test_invoice_is_previewed_then_saved_with_automatic_mappings(): void
     {
         Storage::fake('local');
