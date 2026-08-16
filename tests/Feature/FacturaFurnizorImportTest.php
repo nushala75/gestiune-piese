@@ -143,6 +143,54 @@ class FacturaFurnizorImportTest extends TestCase
         ]);
     }
 
+    public function test_duplicate_catalog_code_prefers_the_product_without_mv_identifier(): void
+    {
+        Storage::fake('local');
+        $canonicalId = DB::table('produse')->where('cod_produs', '11102-1G87-004')->value('id');
+        DB::table('produse_furnizori')->where('produs_id', $canonicalId)->delete();
+        DB::table('produse')->where('id', $canonicalId)->update([
+            'cod_produs' => '91251-LDB5-E00',
+            'denumire_engleza' => 'OIL SEAL 40*75*10',
+        ]);
+        $duplicate = (array) DB::table('produse')->where('id', $canonicalId)->first();
+        unset($duplicate['id']);
+        $duplicate['cod_fgo'] = '00888888';
+        $duplicate['denumire_engleza'] = 'MV4007 SEAL';
+        DB::table('produse')->insert($duplicate);
+
+        $this->mock(MotoTrendInvoiceParser::class, function ($mock): void {
+            $mock->shouldReceive('parse')->once()->andReturn([
+                'supplier_vat' => 'EL094496688',
+                'customer_vat' => 'RO20548513',
+                'invoice_number' => 'TEST-DUPLICATE-WITH-MV',
+                'invoice_date' => '2026-08-13',
+                'currency' => 'EUR',
+                'total_amount' => '4.73',
+                'total_quantity' => 1,
+                'lines' => [[
+                    'line_number' => 1,
+                    'supplier_code' => '91251-LDB5-E00',
+                    'description' => 'OIL SEAL 40*75*10',
+                    'quantity' => 1,
+                    'amount' => '4.73',
+                    'unit_price' => '4.7300',
+                    'valid' => true,
+                    'error' => null,
+                    'source' => '',
+                ]],
+            ]);
+        });
+
+        $this->post('/facturi-furnizori/incarcare', [
+            'factura_pdf' => UploadedFile::fake()->createWithContent('moto-trend.pdf', '%PDF-test'),
+        ])->assertRedirect('/facturi-furnizori/previzualizare');
+
+        $line = session('factura_furnizor_import_preview')['invoice']['lines'][0];
+        $this->assertSame($canonicalId, $line['product_id']);
+        $this->assertTrue($line['auto_catalog_match']);
+        $this->assertSame('91251-LDB5-E00 OIL SEAL 40*75*10', $line['product_label']);
+    }
+
     public function test_invoice_is_previewed_then_saved_with_automatic_mappings(): void
     {
         Storage::fake('local');
@@ -831,7 +879,7 @@ class FacturaFurnizorImportTest extends TestCase
         Schema::create('produse', function (Blueprint $table): void {
             $table->id();
             $table->char('cod_fgo', 8)->nullable()->unique();
-            $table->string('cod_produs', 64)->unique();
+            $table->string('cod_produs', 64)->index();
             $table->string('denumire_engleza');
             $table->text('descriere_romana')->nullable();
             $table->unsignedBigInteger('categorie_id');

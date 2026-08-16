@@ -117,8 +117,18 @@ class FacturaFurnizorImportController extends Controller
                 ->whereIn('cod_produs', $supplierCodes)
                 ->get()
                 ->groupBy(fn (Produs $product): string => mb_strtoupper(trim($product->cod_produs)))
-                ->filter(fn ($products): bool => $products->count() === 1)
-                ->map(fn ($products): Produs => $products->first());
+                ->map(function ($products): ?Produs {
+                    if ($products->count() === 1) {
+                        return $products->first();
+                    }
+
+                    $withoutMv = $products->reject(
+                        fn (Produs $product): bool => preg_match('/^MV\d+\b/iu', trim($product->denumire_engleza)) === 1
+                    );
+
+                    return $withoutMv->count() === 1 ? $withoutMv->first() : null;
+                })
+                ->filter();
 
         foreach ($invoice['lines'] as &$line) {
             $normalizedCode = mb_strtoupper(trim((string) $line['supplier_code']));
