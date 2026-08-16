@@ -74,6 +74,22 @@
                 <input type="number" name="stoc" value="{{ old('stoc', $stoc) }}" min="0" step="1" required>
             </label>
             <label>
+                <span>Cantitate de comandat</span>
+                <input type="number" name="cantitate_de_comandat" value="{{ old('cantitate_de_comandat', $produs->cantitate_de_comandat) }}" min="0" step="1" required>
+            </label>
+            <label>
+                <span>Furnizor comandă</span>
+                <select name="furnizor_comanda_id">
+                    <option value="">— Fără furnizor selectat —</option>
+                    @foreach($produs->furnizori->unique('furnizor_id')->values() as $mapareComanda)
+                        <option value="{{ $mapareComanda->furnizor_id }}" @selected((string) old('furnizor_comanda_id', $produs->furnizor_comanda_id) === (string) $mapareComanda->furnizor_id)>
+                            {{ $mapareComanda->furnizor->denumire }}
+                        </option>
+                    @endforeach
+                </select>
+                <small>Poate fi ales doar dintre furnizorii deja mapați produsului.</small>
+            </label>
+            <label>
                 <span>Preț intrare (EUR)</span>
                 @if($mapareFurnizor)
                     <input type="number" name="pret_intrare" value="{{ old('pret_intrare', number_format((float) $mapareFurnizor->pret_achizitie_ultim, 4, '.', '')) }}" min="0" step="0.0001" required>
@@ -84,6 +100,7 @@
             <label>
                 <span>Preț vânzare cu TVA (RON)</span>
                 <input type="number" name="pret_vanzare_cu_tva" value="{{ old('pret_vanzare_cu_tva', number_format((float) $produs->pret_vanzare_cu_tva, 2, '.', '')) }}" min="0" step="0.01" required>
+                <small>Prețul fără TVA se calculează automat la salvare.</small>
             </label>
             <label>
                 <span>TVA (%)</span>
