@@ -21,7 +21,14 @@
             <h1>Produse</h1>
             <p class="lead">Catalogul local cu maparea FGO, prețuri și stoc.</p>
         </div>
-        <a class="button-secondary page-action" href="{{ route('produse.create') }}">Adaugă produs</a>
+        <div class="row-actions page-action">
+            <form class="row-actions" method="post" action="{{ route('produse.actualizare-stoc') }}" enctype="multipart/form-data">
+                @csrf
+                <input type="file" name="fisier_stoc" accept=".csv,text/csv" required>
+                <button type="submit">Actualizare stoc</button>
+            </form>
+            <a class="button-secondary" href="{{ route('produse.create') }}">Adaugă produs</a>
+        </div>
     </div>
 
     <form class="product-filters" method="get" action="{{ route('produse.index') }}">
