@@ -51,6 +51,7 @@ Fișierul sursă verificat este `database/data/baza_produse_imbunatatita.csv`. C
 
 - `/` — panou principal;
 - `/produse` — catalog, căutare, prețuri și stoc.
+- `/stoc/actualizare` — buton rapid pentru `registru-produse-kymco.xlsx` din rădăcina aplicației și încărcare manuală alternativă; ambele previzualizează și actualizează împreună stocul și prețul final;
 - `/furnizori` — administrarea furnizorilor, adreselor și stării activ/inactiv;
 - `/facturi-furnizori` — import, mapare și recepție facturi furnizori.
 

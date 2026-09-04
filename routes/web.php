@@ -9,6 +9,7 @@ use App\Http\Controllers\ProdusDetaliiUpdateController;
 use App\Http\Controllers\ReceptieController;
 use App\Http\Controllers\SagaExportController;
 use App\Http\Controllers\StocCsvImportController;
+use App\Http\Controllers\StockUpdateController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -29,6 +30,12 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/produse/{produs}/detalii', [ProdusController::class, 'editDetalii'])->name('produse.edit-detalii');
     Route::patch('/produse/{produs}/detalii', ProdusDetaliiUpdateController::class)->name('produse.update-detalii');
     Route::delete('/produse/{produs}', [ProdusController::class, 'destroy'])->name('produse.destroy');
+    Route::get('/stoc/actualizare', [StockUpdateController::class, 'index'])->name('stock-update.index');
+    Route::post('/stoc/actualizare/pregatire', [StockUpdateController::class, 'prepare'])->name('stock-update.prepare');
+    Route::post('/stoc/actualizare/incarcare', [StockUpdateController::class, 'upload'])->name('stock-update.upload');
+    Route::get('/stoc/actualizare/previzualizare', [StockUpdateController::class, 'preview'])->name('stock-update.preview');
+    Route::post('/stoc/actualizare/aplicare', [StockUpdateController::class, 'apply'])->name('stock-update.apply');
+    Route::post('/stoc/actualizare/anulare', [StockUpdateController::class, 'cancel'])->name('stock-update.cancel');
     Route::get('/furnizori', [FurnizorController::class, 'index'])->name('furnizori.index');
     Route::get('/furnizori/adauga', [FurnizorController::class, 'create'])->name('furnizori.create');
     Route::post('/furnizori', [FurnizorController::class, 'store'])->name('furnizori.store');

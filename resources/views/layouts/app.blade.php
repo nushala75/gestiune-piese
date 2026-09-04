@@ -135,7 +135,7 @@
             <a href="{{ route('furnizori.index') }}" @class(['active' => request()->routeIs('furnizori.*')])>Furnizori</a>
             <a href="{{ route('facturi-furnizori.index') }}" @class(['active' => request()->routeIs('facturi-furnizori.*')])>Facturi furnizori</a>
             <span>Recepții</span>
-            <span>Stoc <b class="badge-soon">în curând</b></span>
+            <a href="{{ route('stock-update.index') }}" @class(['active' => request()->routeIs('stock-update.*')])>Actualizare stoc</a>
             <span>Export SAGA <b class="badge-soon">în curând</b></span>
             <span>Export FGO <b class="badge-soon">în curând</b></span>
             <span>Jurnal audit <b class="badge-soon">în curând</b></span>
