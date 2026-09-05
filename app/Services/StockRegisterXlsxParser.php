@@ -15,7 +15,7 @@ class StockRegisterXlsxParser
     private const RELATIONSHIP_NAMESPACE = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
     /**
-     * @return array{sheet: string, rows: list<array{row: int, code: string, stock: int, price_with_vat: string}>}
+     * @return array{sheet: string, rows: list<array{row: int, code: string, stock: int, english_name: string, reorder_quantity: int, weight_kg: string, price_with_vat_eur: string, romanian_name: string}>}
      */
     public function parse(string $filePath): array
     {
@@ -168,17 +168,27 @@ class StockRegisterXlsxParser
 
     /**
      * @param  array<int, array<int, string>>  $rows
-     * @return list<array{row: int, code: string, stock: int, price_with_vat: string}>
+     * @return list<array{row: int, code: string, stock: int, english_name: string, reorder_quantity: int, weight_kg: string, price_with_vat_eur: string, romanian_name: string}>
      */
     private function extractStockRows(array $rows): array
     {
         $headers = $rows[1] ?? [];
         $normalizedHeaders = array_map($this->normalizeHeader(...), $headers);
-        $codeColumn = array_search('cod - referinta prestashop', $normalizedHeaders, true);
-        $stockColumn = array_search('stoc local', $normalizedHeaders, true);
-        $priceColumn = array_search('preț cu tva', $normalizedHeaders, true);
-        if ($codeColumn === false || $stockColumn === false || $priceColumn === false) {
-            throw new RuntimeException('Foaia trebuie să aibă pe primul rând coloanele „Cod - Referinta Prestashop”, „Stoc local” și „Preț cu TVA”.');
+        $columns = [];
+        foreach ([
+            'code' => 'cod - referinta prestashop',
+            'stock' => 'stoc local',
+            'english_name' => 'nume prestashop',
+            'reorder_quantity' => 'nr. produse de comandat',
+            'weight_kg' => 'greutate (kg)',
+            'price_with_vat_eur' => 'preț cu tva',
+            'romanian_name' => 'nume ro',
+        ] as $key => $header) {
+            $column = array_search($header, $normalizedHeaders, true);
+            if ($column === false) {
+                throw new RuntimeException("Foaia nu conține coloana obligatorie „{$header}”.");
+            }
+            $columns[$key] = $column;
         }
 
         $result = [];
@@ -188,10 +198,14 @@ class StockRegisterXlsxParser
             if ($rowNumber === 1) {
                 continue;
             }
-            $rawCode = trim($cells[$codeColumn] ?? '');
-            $rawStock = trim($cells[$stockColumn] ?? '');
-            $rawPrice = trim($cells[$priceColumn] ?? '');
-            if ($rawCode === '' && $rawStock === '' && $rawPrice === '') {
+            $rawCode = trim($cells[$columns['code']] ?? '');
+            $rawStock = trim($cells[$columns['stock']] ?? '');
+            $englishName = trim($cells[$columns['english_name']] ?? '');
+            $rawReorder = trim($cells[$columns['reorder_quantity']] ?? '');
+            $rawWeight = trim($cells[$columns['weight_kg']] ?? '');
+            $rawPrice = trim($cells[$columns['price_with_vat_eur']] ?? '');
+            $romanianName = trim($cells[$columns['romanian_name']] ?? '');
+            if ($rawCode === '' && $rawStock === '' && $englishName === '' && $rawReorder === '' && $rawWeight === '' && $rawPrice === '' && $romanianName === '') {
                 continue;
             }
             if ($rawCode === '') {
@@ -204,8 +218,28 @@ class StockRegisterXlsxParser
 
                 continue;
             }
+            if ($englishName === '') {
+                $errors[] = "rândul {$rowNumber}: Nume PrestaShop lipsește pentru {$rawCode}";
+
+                continue;
+            }
+            if ($rawReorder !== '' && ! preg_match('/^\d+(?:\.0+)?$/', $rawReorder)) {
+                $errors[] = "rândul {$rowNumber}: numărul de produse de comandat pentru {$rawCode} nu este valid";
+
+                continue;
+            }
+            if (! preg_match('/^\d+(?:\.\d+)?$/', $rawWeight)) {
+                $errors[] = "rândul {$rowNumber}: greutatea pentru {$rawCode} nu este validă";
+
+                continue;
+            }
             if (! preg_match('/^\d+(?:\.\d+)?$/', $rawPrice)) {
                 $errors[] = "rândul {$rowNumber}: prețul cu TVA pentru {$rawCode} nu este valid";
+
+                continue;
+            }
+            if ($romanianName === '') {
+                $errors[] = "rândul {$rowNumber}: Nume RO lipsește pentru {$rawCode}";
 
                 continue;
             }
@@ -220,8 +254,12 @@ class StockRegisterXlsxParser
             $result[] = [
                 'row' => $rowNumber,
                 'code' => $code,
-                'stock' => (int) (float) $rawStock,
-                'price_with_vat' => ltrim($rawPrice, '+'),
+                'stock' => max(0, (int) (float) $rawStock),
+                'english_name' => $englishName,
+                'reorder_quantity' => $rawReorder === '' ? 0 : (int) (float) $rawReorder,
+                'weight_kg' => ltrim($rawWeight, '+'),
+                'price_with_vat_eur' => ltrim($rawPrice, '+'),
+                'romanian_name' => $romanianName,
             ];
         }
 

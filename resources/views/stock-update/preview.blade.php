@@ -24,14 +24,17 @@
         <div><small>Potrivite exact</small><strong>{{ $summary['matched'] }}</strong></div>
         <div><small>Stoc de modificat</small><strong>{{ $summary['stock_changed'] }}</strong></div>
         <div><small>Preț de modificat</small><strong>{{ $summary['price_changed'] }}</strong></div>
+        <div><small>Greutate de modificat</small><strong>{{ $summary['weight_changed'] }}</strong></div>
+        <div><small>Nume EN de modificat</small><strong>{{ $summary['english_name_changed'] }}</strong></div>
+        <div><small>Nume RO de modificat</small><strong>{{ $summary['romanian_name_changed'] }}</strong></div>
+        <div><small>De comandat de modificat</small><strong>{{ $summary['reorder_changed'] }}</strong></div>
         <div><small>Coduri inexistente</small><strong>{{ $summary['missing'] }}</strong></div>
         <div><small>Produse din catalog în afara fișierului</small><strong>{{ $summary['catalog_not_in_file'] }}</strong></div>
     </div>
 
     <div class="success">
-        <strong>Curs BNR EUR: {{ number_format((float) $draft['exchange_rate']['value'], 4, ',', '.') }} RON</strong><br>
-        Publicat pentru {{ $draft['exchange_rate']['published_on'] }} și preluat la {{ \Illuminate\Support\Carbon::parse($draft['exchange_rate']['fetched_at'])->format('d.m.Y H:i') }}.
-        Prețurile finale sunt rotunjite la 2 zecimale. <a href="{{ $draft['exchange_rate']['source_url'] }}" target="_blank" rel="noopener">Sursa XML BNR</a>.
+        <strong>Curs folosit: 1 EUR = {{ number_format((float) $draft['exchange_rate'], 4, ',', '.') }} lei</strong><br>
+        Prețul final în lei este „Preț cu TVA” din registru × acest curs și este rotunjit la 2 zecimale.
     </div>
 
     @if($summary['ambiguous'] > 0)
@@ -42,21 +45,22 @@
         <div class="panel-head"><h2>Modificări propuse</h2><span class="pill">primele 150</span></div>
         <div class="table-wrap">
             <table>
-                <thead><tr><th>Rând</th><th>Cod</th><th>Produs</th><th>Stoc actual</th><th>Stoc nou</th><th>Preț fișier EUR cu TVA</th><th>Preț actual RON</th><th>Preț final RON</th></tr></thead>
+                <thead><tr><th>Rând</th><th>Cod</th><th>Stoc actual → nou</th><th>Preț EUR</th><th>Preț RON actual → nou</th><th>Greutate actuală → nouă</th><th>De comandat actual → nou</th><th>Nume EN actual → nou</th><th>Nume RO actual → nou</th></tr></thead>
                 <tbody>
                 @forelse(array_slice($draft['preview']['changed'], 0, 150) as $line)
                     <tr>
                         <td>{{ $line['row'] }}</td>
                         <td><code>{{ $line['code'] }}</code></td>
-                        <td class="name">{{ $line['product_name'] }}</td>
-                        <td @class(['danger' => $line['stock_changed']])>{{ $line['old_stock'] }}</td>
-                        <td @class(['danger' => $line['stock_changed']])>{{ $line['new_stock'] }}</td>
-                        <td class="money">{{ number_format((float) $line['price_with_vat'], 4, ',', '.') }}</td>
-                        <td class="money">{{ $line['old_price'] === null ? '—' : number_format((float) $line['old_price'], 2, ',', '.') }}</td>
-                        <td @class(['money', 'danger' => $line['price_changed']])>{{ number_format((float) $line['new_price'], 2, ',', '.') }}</td>
+                        <td @class(['danger' => $line['stock_changed']])>{{ $line['old_stock'] }} → {{ $line['new_stock'] }}</td>
+                        <td class="money">{{ number_format((float) $line['price_with_vat_eur'], 4, ',', '.') }}</td>
+                        <td @class(['money', 'danger' => $line['price_changed']])>{{ $line['old_price'] === null ? '—' : number_format((float) $line['old_price'], 2, ',', '.') }} → {{ number_format((float) $line['new_price'], 2, ',', '.') }}</td>
+                        <td @class(['money', 'danger' => $line['weight_changed']])>{{ $line['old_weight'] === null ? '—' : number_format((float) $line['old_weight'], 3, ',', '.') }} → {{ number_format((float) $line['new_weight'], 3, ',', '.') }}</td>
+                        <td @class(['danger' => $line['reorder_changed']])>{{ $line['old_reorder_quantity'] }} → {{ $line['new_reorder_quantity'] }}</td>
+                        <td @class(['name', 'danger' => $line['english_name_changed']])>{{ $line['old_english_name'] }} → {{ $line['new_english_name'] }}</td>
+                        <td @class(['name', 'danger' => $line['romanian_name_changed']])>{{ $line['old_romanian_name'] ?: '—' }} → {{ $line['new_romanian_name'] }}</td>
                     </tr>
                 @empty
-                    <tr><td class="empty" colspan="8">Nu există valori diferite față de catalog.</td></tr>
+                    <tr><td class="empty" colspan="9">Nu există valori diferite față de catalog.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -86,8 +90,8 @@
         <form method="post" action="{{ route('stock-update.apply') }}">
             @csrf
             <input type="hidden" name="token" value="{{ $draft['token'] }}">
-            <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="confirmare" value="1" required> Am verificat previzualizarea și cursul BNR</label>
-            <button type="submit" @disabled($summary['ambiguous'] > 0)>Actualizare stoc și prețuri</button>
+            <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="confirmare" value="1" required> Am verificat corespondența și cursul EUR/RON</label>
+            <button type="submit" @disabled($summary['ambiguous'] > 0)>Aplică actualizarea produselor</button>
         </form>
         <form method="post" action="{{ route('stock-update.cancel') }}">
             @csrf

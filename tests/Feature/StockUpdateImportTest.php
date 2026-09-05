@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Services\BnrExchangeRateService;
 use App\Services\StockRegisterXlsxParser;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\UploadedFile;
@@ -30,12 +29,15 @@ class StockUpdateImportTest extends TestCase
             $table->id();
             $table->string('cod_produs');
             $table->string('denumire_engleza');
+            $table->text('descriere_romana')->nullable();
             $table->bigInteger('stoc_minim')->default(0);
             $table->bigInteger('cantitate_de_comandat')->default(0);
             $table->unsignedBigInteger('furnizor_comanda_id')->nullable();
             $table->boolean('furnizor_comanda_manual')->default(false);
             $table->decimal('pret_vanzare_fara_tva', 18, 4)->nullable();
             $table->decimal('pret_vanzare_cu_tva', 18, 2)->nullable();
+            $table->decimal('cota_tva', 5, 2)->default(21);
+            $table->decimal('greutate_kg', 12, 3)->nullable();
             $table->timestamps();
         });
         Schema::create('produse_furnizori', function (Blueprint $table): void {
@@ -86,8 +88,11 @@ class StockUpdateImportTest extends TestCase
             $productId = DB::table('produse')->insertGetId([
                 'cod_produs' => $row['code'],
                 'denumire_engleza' => $row['name'],
+                'descriere_romana' => 'Vechi '.$row['name'],
+                'cantitate_de_comandat' => 2,
                 'pret_vanzare_fara_tva' => 1,
                 'pret_vanzare_cu_tva' => $row['price'],
+                'greutate_kg' => 1,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -108,39 +113,31 @@ class StockUpdateImportTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_preview_and_confirmed_apply_update_stock_and_final_price(): void
+    public function test_preview_and_confirmed_apply_update_all_confirmed_fields(): void
     {
         Storage::fake('local');
         Storage::disk('local')->put('sursa/registru-produse-kymco.xlsx', 'continut-test');
         config(['stock-register.path' => Storage::disk('local')->path('sursa/registru-produse-kymco.xlsx')]);
         $rows = [
-            ['row' => 2, 'code' => 'ABC-1', 'stock' => 4, 'price_with_vat' => '10'],
-            ['row' => 3, 'code' => 'ABC-2', 'stock' => -1, 'price_with_vat' => '20'],
-            ['row' => 4, 'code' => 'MISSING', 'stock' => 3, 'price_with_vat' => '30'],
+            ['row' => 2, 'code' => 'ABC-1', 'stock' => 4, 'english_name' => 'English A', 'reorder_quantity' => 3, 'weight_kg' => '0.250', 'price_with_vat_eur' => '10', 'romanian_name' => 'Română A'],
+            ['row' => 3, 'code' => 'ABC-2', 'stock' => 0, 'english_name' => 'English B', 'reorder_quantity' => 0, 'weight_kg' => '0.500', 'price_with_vat_eur' => '20', 'romanian_name' => 'Română B'],
+            ['row' => 4, 'code' => 'MISSING', 'stock' => 3, 'english_name' => 'Missing', 'reorder_quantity' => 0, 'weight_kg' => '1', 'price_with_vat_eur' => '30', 'romanian_name' => 'Lipsă'],
         ];
         $this->mock(StockRegisterXlsxParser::class, function (MockInterface $mock) use ($rows): void {
             $mock->shouldReceive('parse')->twice()->andReturn(['sheet' => 'Produse', 'rows' => $rows]);
         });
-        $this->mock(BnrExchangeRateService::class, function (MockInterface $mock): void {
-            $mock->shouldReceive('latestEuroRate')->once()->andReturn([
-                'currency' => 'EUR',
-                'value' => '5.0000',
-                'published_on' => '2026-09-04',
-                'fetched_at' => '2026-09-04T12:00:00+03:00',
-                'source_url' => BnrExchangeRateService::SOURCE_URL,
-            ]);
-        });
-
-        $this->post('/stoc/actualizare/pregatire')
+        $this->post('/stoc/actualizare/pregatire', ['exchange_rate' => '5,31'])
             ->assertRedirect('/stoc/actualizare/previzualizare');
         $token = session('stock_update_import_preview.token');
 
         $this->get('/stoc/actualizare/previzualizare')
             ->assertOk()
-            ->assertSee('Curs BNR EUR: 5,0000 RON')
+            ->assertSee('Curs folosit: 1 EUR = 5,3100 lei')
             ->assertSee('MISSING')
-            ->assertSee('50,00')
-            ->assertSee('100,00');
+            ->assertSee('53,10')
+            ->assertSee('106,20')
+            ->assertSee('English A')
+            ->assertSee('Română A');
 
         $this->post('/stoc/actualizare/aplicare', [
             'token' => $token,
@@ -150,35 +147,26 @@ class StockUpdateImportTest extends TestCase
         $firstId = DB::table('produse')->where('cod_produs', 'ABC-1')->value('id');
         $secondId = DB::table('produse')->where('cod_produs', 'ABC-2')->value('id');
         $this->assertDatabaseHas('solduri_stoc', ['produs_id' => $firstId, 'cantitate_fizica' => 4]);
-        $this->assertDatabaseHas('solduri_stoc', ['produs_id' => $secondId, 'cantitate_fizica' => -1]);
-        $this->assertDatabaseHas('produse', ['id' => $firstId, 'pret_vanzare_cu_tva' => 50.00]);
-        $this->assertDatabaseHas('produse', ['id' => $secondId, 'pret_vanzare_cu_tva' => 100.00]);
-        $this->assertDatabaseCount('miscari_stoc', 2);
-        $this->assertDatabaseHas('jurnal_audit', ['actiune' => 'actualizare_stoc_xlsx']);
+        $this->assertDatabaseHas('solduri_stoc', ['produs_id' => $secondId, 'cantitate_fizica' => 0]);
+        $this->assertDatabaseHas('produse', ['id' => $firstId, 'pret_vanzare_cu_tva' => 53.10, 'greutate_kg' => 0.250, 'denumire_engleza' => 'English A', 'descriere_romana' => 'Română A', 'cantitate_de_comandat' => 3]);
+        $this->assertDatabaseHas('produse', ['id' => $secondId, 'pret_vanzare_cu_tva' => 106.20, 'greutate_kg' => 0.500, 'denumire_engleza' => 'English B', 'descriere_romana' => 'Română B', 'cantitate_de_comandat' => 0]);
+        $this->assertDatabaseCount('miscari_stoc', 1);
+        $this->assertDatabaseHas('jurnal_audit', ['actiune' => 'actualizare_produse_xlsx']);
     }
 
     public function test_manual_upload_remains_available_as_an_alternative(): void
     {
         Storage::fake('local');
         $rows = [
-            ['row' => 2, 'code' => 'ABC-1', 'stock' => 4, 'price_with_vat' => '10'],
+            ['row' => 2, 'code' => 'ABC-1', 'stock' => 4, 'english_name' => 'English A', 'reorder_quantity' => 0, 'weight_kg' => '0.250', 'price_with_vat_eur' => '10', 'romanian_name' => 'Română A'],
         ];
         $this->mock(StockRegisterXlsxParser::class, function (MockInterface $mock) use ($rows): void {
             $mock->shouldReceive('parse')->once()->andReturn(['sheet' => 'Produse', 'rows' => $rows]);
         });
-        $this->mock(BnrExchangeRateService::class, function (MockInterface $mock): void {
-            $mock->shouldReceive('latestEuroRate')->once()->andReturn([
-                'currency' => 'EUR',
-                'value' => '5.0000',
-                'published_on' => '2026-09-04',
-                'fetched_at' => '2026-09-04T12:00:00+03:00',
-                'source_url' => BnrExchangeRateService::SOURCE_URL,
-            ]);
-        });
-
         $this->get('/stoc/actualizare')
             ->assertOk()
-            ->assertSee('Actualizare stoc și prețuri')
+            ->assertSee('Curs EUR/RON')
+            ->assertSee('value="5.31"', false)
             ->assertSee('Încărcare manuală')
             ->assertSee('name="registru"', false);
 
@@ -188,6 +176,7 @@ class StockUpdateImportTest extends TestCase
                 20,
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             ),
+            'exchange_rate' => '5.31',
         ])->assertRedirect('/stoc/actualizare/previzualizare');
 
         $temporaryPath = session('stock_update_import_preview.temporary_path');

@@ -26,7 +26,12 @@
         <form class="import-form" method="post" action="{{ route('stock-update.prepare') }}">
             @csrf
             <label><span>Fișier folosit</span><code>{{ config('stock-register.path') }}</code></label>
-            <button type="submit">Actualizare stoc și prețuri</button>
+            <label>
+                <span>Curs EUR/RON</span>
+                <input type="text" name="exchange_rate" value="{{ old('exchange_rate', $defaultExchangeRate) }}" inputmode="decimal" pattern="[0-9]+([\.,][0-9]{1,4})?" required>
+                <small>Valoare implicită: 1 EUR = {{ number_format((float) $defaultExchangeRate, 2, ',', '.') }} lei. Poate fi modificată înainte de previzualizare.</small>
+            </label>
+            <button type="submit">Previzualizează actualizarea</button>
         </form>
     </section>
 
@@ -39,6 +44,10 @@
                 <input type="file" name="registru" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                 <small>Fișierul prestabilit nu este înlocuit. Fișierul ales este folosit numai pentru această actualizare.</small>
             </label>
+            <label>
+                <span>Curs EUR/RON</span>
+                <input type="text" name="exchange_rate" value="{{ old('exchange_rate', $defaultExchangeRate) }}" inputmode="decimal" pattern="[0-9]+([\.,][0-9]{1,4})?" required>
+            </label>
             <button type="submit">Încarcă manual și previzualizează</button>
         </form>
     </section>
@@ -48,8 +57,10 @@
         <ul>
             <li>Produsele sunt identificate numai prin codul din coloana „Cod - Referinta Prestashop”.</li>
             <li>Produsele lipsă nu sunt create și sunt afișate separat în previzualizare.</li>
-            <li>Preț final RON = „Preț cu TVA” din fișier × cursul BNR EUR afișat la import.</li>
-            <li>Stocul și prețul final sunt actualizate împreună după confirmarea previzualizării.</li>
+            <li>Preț final RON = „Preț cu TVA” din fișier × cursul EUR/RON introdus înainte de import.</li>
+            <li>Se actualizează stocul, prețul final, greutatea, numele în engleză, denumirea în română și cantitatea de comandat.</li>
+            <li>Celulele goale din „Nr. produse de comandat” și stocurile negative devin 0.</li>
+            <li>Nicio modificare nu se aplică înainte de confirmarea previzualizării.</li>
         </ul>
     </section>
 @endsection

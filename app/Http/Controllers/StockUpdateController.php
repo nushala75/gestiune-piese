@@ -6,7 +6,6 @@ use App\Models\Gestiune;
 use App\Models\JurnalAudit;
 use App\Models\MiscareStoc;
 use App\Models\Produs;
-use App\Services\BnrExchangeRateService;
 use App\Services\NecesarAprovizionareService;
 use App\Services\StockRegisterXlsxParser;
 use Brick\Math\BigDecimal;
@@ -19,6 +18,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -28,42 +28,46 @@ class StockUpdateController extends Controller
 
     public function index(): View
     {
-        return view('stock-update.index');
+        return view('stock-update.index', [
+            'defaultExchangeRate' => (string) config('stock-register.default_exchange_rate', '5.31'),
+        ]);
     }
 
-    public function prepare(Request $request, StockRegisterXlsxParser $parser, BnrExchangeRateService $bnr): RedirectResponse
+    public function prepare(Request $request, StockRegisterXlsxParser $parser): RedirectResponse
     {
+        $exchangeRate = $this->validatedExchangeRate($request);
         $this->clearDraft($request);
         $sourcePath = (string) config('stock-register.path');
         if (! is_file($sourcePath)) {
-            return back()->withErrors([
+            return back()->withInput()->withErrors([
                 'registru' => 'Fișierul prestabilit nu există: '.$sourcePath,
             ]);
         }
 
-        return $this->preparePreview($request, $parser, $bnr, $sourcePath, basename($sourcePath));
+        return $this->preparePreview($request, $parser, $sourcePath, basename($sourcePath), $exchangeRate);
     }
 
-    public function upload(Request $request, StockRegisterXlsxParser $parser, BnrExchangeRateService $bnr): RedirectResponse
+    public function upload(Request $request, StockRegisterXlsxParser $parser): RedirectResponse
     {
         $request->validate([
             'registru' => ['required', 'file', 'extensions:xlsx', 'max:20480'],
         ]);
+        $exchangeRate = $this->validatedExchangeRate($request);
         $this->clearDraft($request);
 
         $file = $request->file('registru');
         $token = (string) Str::uuid();
         $temporaryPath = "importuri/stoc/temporare/{$token}.xlsx";
         if (! Storage::disk('local')->putFileAs('importuri/stoc/temporare', $file, "{$token}.xlsx")) {
-            return back()->withErrors(['registru' => 'Fișierul selectat nu a putut fi copiat pentru verificare.']);
+            return back()->withInput()->withErrors(['registru' => 'Fișierul selectat nu a putut fi copiat pentru verificare.']);
         }
 
         return $this->preparePreview(
             $request,
             $parser,
-            $bnr,
             Storage::disk('local')->path($temporaryPath),
             $file->getClientOriginalName(),
+            $exchangeRate,
             $temporaryPath,
         );
     }
@@ -71,9 +75,9 @@ class StockUpdateController extends Controller
     private function preparePreview(
         Request $request,
         StockRegisterXlsxParser $parser,
-        BnrExchangeRateService $bnr,
         string $sourcePath,
         string $originalName,
+        string $exchangeRate,
         ?string $temporaryPath = null,
     ): RedirectResponse {
         $hash = hash_file('sha256', $sourcePath);
@@ -82,19 +86,18 @@ class StockUpdateController extends Controller
                 Storage::disk('local')->delete($temporaryPath);
             }
 
-            return back()->withErrors(['registru' => 'Amprenta fișierului nu a putut fi calculată.']);
+            return back()->withInput()->withErrors(['registru' => 'Amprenta fișierului nu a putut fi calculată.']);
         }
 
         try {
             $parsed = $parser->parse($sourcePath);
-            $exchangeRate = $bnr->latestEuroRate();
-            $preview = $this->buildPreview($parsed['rows'], $this->companyWarehouse(), $exchangeRate['value']);
+            $preview = $this->buildPreview($parsed['rows'], $this->companyWarehouse(), $exchangeRate);
         } catch (Throwable $exception) {
             if ($temporaryPath !== null) {
                 Storage::disk('local')->delete($temporaryPath);
             }
 
-            return back()->withErrors(['registru' => $exception->getMessage()]);
+            return back()->withInput()->withErrors(['registru' => $exception->getMessage()]);
         }
 
         if ($preview['summary']['matched'] === 0) {
@@ -102,7 +105,7 @@ class StockUpdateController extends Controller
                 Storage::disk('local')->delete($temporaryPath);
             }
 
-            return back()->withErrors(['registru' => 'Niciun cod din registru nu există în catalogul local.']);
+            return back()->withInput()->withErrors(['registru' => 'Niciun cod din registru nu există în catalogul local.']);
         }
 
         $request->session()->put(self::SESSION_KEY, [
@@ -136,7 +139,7 @@ class StockUpdateController extends Controller
             'token' => ['required', 'uuid'],
             'confirmare' => ['accepted'],
         ], [
-            'confirmare.accepted' => 'Bifează confirmarea înainte de aplicarea stocului.',
+            'confirmare.accepted' => 'Bifează confirmarea înainte de aplicarea actualizării.',
         ]);
         $draft = $request->session()->get(self::SESSION_KEY);
         if (! is_array($draft) || ! hash_equals((string) ($draft['token'] ?? ''), $validated['token'])) {
@@ -147,19 +150,19 @@ class StockUpdateController extends Controller
         $sourcePath = (string) ($draft['source_path'] ?? '');
         if (! is_file($sourcePath)) {
             return redirect()->route('stock-update.index')
-                ->withErrors(['registru' => 'Fișierul prestabilit nu mai există. Verifică registrul și încearcă din nou.']);
+                ->withErrors(['registru' => 'Fișierul folosit la previzualizare nu mai există.']);
         }
         $currentHash = hash_file('sha256', $sourcePath);
         if ($currentHash === false || ! hash_equals((string) $draft['hash'], $currentHash)) {
-            throw new RuntimeException('Fișierul prestabilit a fost modificat după generarea previzualizării.');
+            throw new RuntimeException('Fișierul a fost modificat după generarea previzualizării.');
         }
 
         try {
             $parsed = $parser->parse($sourcePath);
             $warehouse = $this->companyWarehouse();
-            $exchangeRate = (string) ($draft['exchange_rate']['value'] ?? '');
-            if (! preg_match('/^\d+(?:\.\d+)?$/', $exchangeRate)) {
-                throw new RuntimeException('Cursul BNR salvat în previzualizare nu este valid.');
+            $exchangeRate = (string) ($draft['exchange_rate'] ?? '');
+            if (! preg_match('/^\d+(?:\.\d{1,4})?$/', $exchangeRate) || (float) $exchangeRate <= 0) {
+                throw new RuntimeException('Cursul EUR salvat în previzualizare nu este valid.');
             }
             $freshPreview = $this->buildPreview($parsed['rows'], $warehouse, $exchangeRate);
             if ($freshPreview['summary']['ambiguous'] > 0) {
@@ -180,69 +183,94 @@ class StockUpdateController extends Controller
                 $result = DB::transaction(function () use ($draft, $exchangeRate, $parsed, $reorder, $warehouse): array {
                     $preview = $this->buildPreview($parsed['rows'], $warehouse, $exchangeRate, true);
                     if ($preview['summary']['ambiguous'] > 0) {
-                        throw new RuntimeException('Există coduri care corespund mai multor produse. Stocul nu a fost modificat.');
+                        throw new RuntimeException('Există coduri care corespund mai multor produse. Datele nu au fost modificate.');
                     }
 
-                    $stockUpdated = 0;
-                    $priceUpdated = 0;
+                    $applied = [
+                        'products_applied' => 0,
+                        'stock_applied' => 0,
+                        'price_applied' => 0,
+                        'weight_applied' => 0,
+                        'english_name_applied' => 0,
+                        'romanian_name_applied' => 0,
+                        'reorder_applied' => 0,
+                    ];
+
                     foreach ($preview['changed'] as $line) {
+                        $product = Produs::query()->findOrFail($line['product_id']);
+                        $productUpdates = [];
+
+                        if ($line['price_changed']) {
+                            $vatPercent = BigDecimal::of((string) ($product->cota_tva ?? '21'));
+                            $vatFactor = BigDecimal::of('1')->plus(
+                                $vatPercent->dividedBy('100', 6, RoundingMode::HalfUp),
+                            );
+                            $productUpdates['pret_vanzare_fara_tva'] = BigDecimal::of($line['new_price'])
+                                ->dividedBy($vatFactor, 4, RoundingMode::HalfUp)
+                                ->__toString();
+                            $productUpdates['pret_vanzare_cu_tva'] = $line['new_price'];
+                            $applied['price_applied']++;
+                        }
+                        if ($line['weight_changed']) {
+                            $productUpdates['greutate_kg'] = $line['new_weight'];
+                            $applied['weight_applied']++;
+                        }
+                        if ($line['english_name_changed']) {
+                            $productUpdates['denumire_engleza'] = $line['new_english_name'];
+                            $applied['english_name_applied']++;
+                        }
+                        if ($line['romanian_name_changed']) {
+                            $productUpdates['descriere_romana'] = $line['new_romanian_name'];
+                            $applied['romanian_name_applied']++;
+                        }
+                        if ($line['reorder_changed']) {
+                            $productUpdates['cantitate_de_comandat'] = $line['new_reorder_quantity'];
+                            $applied['reorder_applied']++;
+                        }
+                        if ($productUpdates !== []) {
+                            $product->update($productUpdates);
+                        }
+
                         if ($line['stock_changed']) {
                             DB::table('solduri_stoc')->updateOrInsert(
                                 ['gestiune_id' => $warehouse->id, 'produs_id' => $line['product_id']],
-                                [
-                                    'cantitate_fizica' => $line['new_stock'],
-                                    'updated_at' => now(),
-                                ],
+                                ['cantitate_fizica' => $line['new_stock'], 'updated_at' => now()],
                             );
-                            $stockUpdated++;
+                            $applied['stock_applied']++;
+
+                            if (Schema::hasTable('miscari_stoc') && $line['delta'] !== 0) {
+                                MiscareStoc::query()->create([
+                                    'gestiune_id' => $warehouse->id,
+                                    'produs_id' => $line['product_id'],
+                                    'tip' => 'ajustare_inventar',
+                                    'cantitate' => $line['delta'],
+                                    'cost_unitar' => null,
+                                    'receptie_linie_id' => null,
+                                    'referinta_tip' => 'import_registru_xlsx',
+                                    'referinta_id' => null,
+                                    'explicatie' => 'Actualizare din registrul '.$draft['original_name'],
+                                ]);
+                            }
+
+                            $reorder->sincronizeaza($product->fresh(), $warehouse);
                         }
-                        if ($line['stock_changed'] && Schema::hasTable('miscari_stoc') && $line['delta'] !== 0) {
-                            MiscareStoc::query()->create([
-                                'gestiune_id' => $warehouse->id,
-                                'produs_id' => $line['product_id'],
-                                'tip' => 'ajustare_inventar',
-                                'cantitate' => $line['delta'],
-                                'cost_unitar' => null,
-                                'receptie_linie_id' => null,
-                                'referinta_tip' => 'import_stoc_xlsx',
-                                'referinta_id' => null,
-                                'explicatie' => 'Actualizare din registrul '.$draft['original_name'],
-                            ]);
-                        }
-                        $product = Produs::query()->findOrFail($line['product_id']);
-                        if ($line['stock_changed']) {
-                            $reorder->sincronizeaza($product, $warehouse);
-                        }
-                        if ($line['price_changed']) {
-                            $netPrice = BigDecimal::of($line['new_price'])
-                                ->dividedBy('1.21', 4, RoundingMode::HalfUp)
-                                ->__toString();
-                            $product->update([
-                                'pret_vanzare_fara_tva' => $netPrice,
-                                'pret_vanzare_cu_tva' => $line['new_price'],
-                            ]);
-                            $priceUpdated++;
-                        }
+
+                        $applied['products_applied']++;
                     }
 
                     if (Schema::hasTable('jurnal_audit')) {
                         JurnalAudit::query()->create([
                             'actor_tip' => 'user',
                             'actor_id' => request()->user()?->id,
-                            'actiune' => 'actualizare_stoc_xlsx',
+                            'actiune' => 'actualizare_produse_xlsx',
                             'entitate_tip' => 'gestiune',
                             'entitate_id' => $warehouse->id,
                             'date_inainte' => ['fisier' => $draft['original_name'], 'hash_sha256' => $draft['hash']],
-                            'date_dupa' => $preview['summary'] + [
-                                'stoc_aplicat' => $stockUpdated,
-                                'pret_aplicat' => $priceUpdated,
-                                'curs_bnr_eur' => $exchangeRate,
-                                'data_curs_bnr' => $draft['exchange_rate']['published_on'] ?? null,
-                            ],
+                            'date_dupa' => $preview['summary'] + $applied + ['curs_eur_ron' => $exchangeRate],
                         ]);
                     }
 
-                    return $preview['summary'] + ['stock_applied' => $stockUpdated, 'price_applied' => $priceUpdated];
+                    return $preview['summary'] + $applied;
                 });
             } catch (Throwable $exception) {
                 if ($archiveCreated) {
@@ -253,7 +281,7 @@ class StockUpdateController extends Controller
         } catch (Throwable $exception) {
             report($exception);
 
-            return back()->withErrors(['registru' => 'Stocul nu a fost actualizat: '.$exception->getMessage()]);
+            return back()->withErrors(['registru' => 'Datele nu au fost actualizate: '.$exception->getMessage()]);
         }
 
         $request->session()->forget(self::SESSION_KEY);
@@ -263,7 +291,7 @@ class StockUpdateController extends Controller
 
         return redirect()->route('stock-update.index')->with(
             'status',
-            "Actualizarea s-a încheiat: stoc modificat la {$result['stock_applied']} produse, preț final modificat la {$result['price_applied']} produse, {$result['missing']} coduri inexistente ignorate.",
+            "Actualizarea s-a încheiat: {$result['products_applied']} produse modificate, {$result['missing']} coduri inexistente ignorate.",
         );
     }
 
@@ -272,6 +300,24 @@ class StockUpdateController extends Controller
         $this->clearDraft($request);
 
         return redirect()->route('stock-update.index');
+    }
+
+    private function validatedExchangeRate(Request $request): string
+    {
+        $validated = $request->validate([
+            'exchange_rate' => ['required', 'string', 'regex:/^\d+(?:[\.,]\d{1,4})?$/'],
+        ], [
+            'exchange_rate.required' => 'Completează cursul EUR/RON.',
+            'exchange_rate.regex' => 'Cursul EUR/RON trebuie să fie un număr pozitiv cu maximum 4 zecimale.',
+        ]);
+        $rate = str_replace(',', '.', $validated['exchange_rate']);
+        if ((float) $rate <= 0) {
+            throw ValidationException::withMessages([
+                'exchange_rate' => 'Cursul EUR/RON trebuie să fie mai mare decât zero.',
+            ]);
+        }
+
+        return BigDecimal::of($rate)->__toString();
     }
 
     private function clearDraft(Request $request): void
@@ -291,7 +337,7 @@ class StockUpdateController extends Controller
     }
 
     /**
-     * @param  list<array{row: int, code: string, stock: int, price_with_vat: string}>  $rows
+     * @param  list<array{row: int, code: string, stock: int, english_name: string, reorder_quantity: int, weight_kg: string, price_with_vat_eur: string, romanian_name: string}>  $rows
      * @return array{summary: array<string, int>, changed: array, unchanged: array, missing: array, ambiguous: array}
      */
     private function buildPreview(array $rows, Gestiune $warehouse, string $exchangeRate, bool $lock = false): array
@@ -327,13 +373,20 @@ class StockUpdateController extends Controller
 
             $product = $matches->first();
             $oldStock = (int) ($stocks[$product->id] ?? 0);
-            $newPrice = BigDecimal::of($row['price_with_vat'])
+            $newPrice = BigDecimal::of($row['price_with_vat_eur'])
                 ->multipliedBy($exchangeRate)
                 ->toScale(2, RoundingMode::HalfUp)
                 ->__toString();
             $oldPrice = $product->pret_vanzare_cu_tva;
-            $stockChanged = $oldStock !== $row['stock'];
-            $priceChanged = $oldPrice === null || ! BigDecimal::of($oldPrice)->isEqualTo($newPrice);
+            $oldWeight = $product->greutate_kg;
+            $changes = [
+                'stock_changed' => $oldStock !== $row['stock'],
+                'price_changed' => $this->decimalChanged($oldPrice, $newPrice),
+                'weight_changed' => $this->decimalChanged($oldWeight, $row['weight_kg']),
+                'english_name_changed' => trim((string) $product->denumire_engleza) !== $row['english_name'],
+                'romanian_name_changed' => trim((string) $product->descriere_romana) !== $row['romanian_name'],
+                'reorder_changed' => (int) $product->cantitate_de_comandat !== $row['reorder_quantity'],
+            ];
             $line = $row + [
                 'product_id' => $product->id,
                 'product_name' => $product->denumire_engleza,
@@ -342,26 +395,45 @@ class StockUpdateController extends Controller
                 'delta' => $row['stock'] - $oldStock,
                 'old_price' => $oldPrice,
                 'new_price' => $newPrice,
-                'stock_changed' => $stockChanged,
-                'price_changed' => $priceChanged,
-            ];
-            $result[$stockChanged || $priceChanged ? 'changed' : 'unchanged'][] = $line;
+                'old_weight' => $oldWeight,
+                'new_weight' => $row['weight_kg'],
+                'old_english_name' => $product->denumire_engleza,
+                'new_english_name' => $row['english_name'],
+                'old_romanian_name' => $product->descriere_romana,
+                'new_romanian_name' => $row['romanian_name'],
+                'old_reorder_quantity' => (int) $product->cantitate_de_comandat,
+                'new_reorder_quantity' => $row['reorder_quantity'],
+            ] + $changes;
+            $result[in_array(true, $changes, true) ? 'changed' : 'unchanged'][] = $line;
         }
 
-        $catalogCodes = Produs::query()->pluck('cod_produs')->map(fn ($code) => mb_strtoupper(trim((string) $code)))->unique();
+        $catalogCodes = Produs::query()->pluck('cod_produs')
+            ->map(fn ($code) => mb_strtoupper(trim((string) $code)))
+            ->filter()
+            ->unique();
         $fileCodes = $codes->flip();
+        $changed = collect($result['changed']);
         $result['summary'] = [
             'rows' => count($rows),
             'matched' => count($result['changed']) + count($result['unchanged']),
             'changed' => count($result['changed']),
             'unchanged' => count($result['unchanged']),
-            'stock_changed' => collect($result['changed'])->where('stock_changed', true)->count(),
-            'price_changed' => collect($result['changed'])->where('price_changed', true)->count(),
+            'stock_changed' => $changed->where('stock_changed', true)->count(),
+            'price_changed' => $changed->where('price_changed', true)->count(),
+            'weight_changed' => $changed->where('weight_changed', true)->count(),
+            'english_name_changed' => $changed->where('english_name_changed', true)->count(),
+            'romanian_name_changed' => $changed->where('romanian_name_changed', true)->count(),
+            'reorder_changed' => $changed->where('reorder_changed', true)->count(),
             'missing' => count($result['missing']),
             'ambiguous' => count($result['ambiguous']),
             'catalog_not_in_file' => $catalogCodes->reject(fn ($code) => $fileCodes->has($code))->count(),
         ];
 
         return $result;
+    }
+
+    private function decimalChanged(mixed $oldValue, string $newValue): bool
+    {
+        return $oldValue === null || ! BigDecimal::of((string) $oldValue)->isEqualTo($newValue);
     }
 }
