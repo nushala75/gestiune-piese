@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Services\NecesarAprovizionareService;
+use App\Services\ProductRegisterSynchronizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -14,8 +15,11 @@ use Illuminate\Validation\ValidationException;
 
 class StocCsvImportController extends Controller
 {
-    public function store(Request $request, NecesarAprovizionareService $necesarAprovizionare): View
-    {
+    public function store(
+        Request $request,
+        NecesarAprovizionareService $necesarAprovizionare,
+        ProductRegisterSynchronizer $register,
+    ): View {
         $request->validate([
             'fisier_stoc' => ['required', 'file', 'max:10240'],
         ]);
@@ -59,6 +63,7 @@ class StocCsvImportController extends Controller
             $coduriPrezenteCsv,
             $gestiune,
             $necesarAprovizionare,
+            $register,
             $produse,
             $produsePeCod,
             &$actualizate,
@@ -74,6 +79,7 @@ class StocCsvImportController extends Controller
 
                 if ($potriviri === null || $potriviri->isEmpty()) {
                     $produseNoi[] = ['cod' => $cod, 'cantitate' => $cantitate];
+
                     continue;
                 }
 
@@ -83,6 +89,7 @@ class StocCsvImportController extends Controller
                         'cantitate' => $cantitate,
                         'produse_gasite' => $potriviri->count(),
                     ];
+
                     continue;
                 }
 
@@ -92,6 +99,7 @@ class StocCsvImportController extends Controller
 
                 if ($stocCurent === $cantitate) {
                     $neschimbate++;
+
                     continue;
                 }
 
@@ -135,6 +143,10 @@ class StocCsvImportController extends Controller
 
             $produseAfectate->unique('id')->each(
                 fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune),
+            );
+            $register->sync(
+                $produseAfectate->unique('id')->map(fn (Produs $produs) => $produs->refresh()),
+                $gestiune,
             );
         });
 
@@ -194,6 +206,7 @@ class StocCsvImportController extends Controller
 
             if ($cod === '') {
                 $randuriInvalide[] = ['linie' => $linie, 'motiv' => 'Cod produs lipsă.'];
+
                 continue;
             }
 
@@ -201,12 +214,14 @@ class StocCsvImportController extends Controller
             $cantitateNormalizata = str_replace(',', '.', $cantitateBruta);
             if (! is_numeric($cantitateNormalizata)) {
                 $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitate invalidă pentru {$cod}."];
+
                 continue;
             }
 
             $cantitateNumerica = (float) $cantitateNormalizata;
             if (floor($cantitateNumerica) !== $cantitateNumerica) {
                 $randuriInvalide[] = ['linie' => $linie, 'motiv' => "Cantitatea pentru {$cod} trebuie să fie număr întreg."];
+
                 continue;
             }
 
@@ -220,6 +235,7 @@ class StocCsvImportController extends Controller
                 unset($cantitati[$cod]);
                 $coduriDuplicate[$cod] = true;
                 $duplicateCsv[] = ['cod' => $cod, 'linie' => $linie];
+
                 continue;
             }
 

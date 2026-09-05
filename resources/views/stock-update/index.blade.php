@@ -56,7 +56,7 @@
         <h2>Reguli de import</h2>
         <ul>
             <li>Produsele sunt identificate numai prin codul din coloana „Cod - Referinta Prestashop”.</li>
-            <li>Produsele lipsă nu sunt create și sunt afișate separat în previzualizare.</li>
+            <li>Produsele lipsă nu sunt create automat; sunt afișate separat și pot fi create manual, maximum 10 într-o sesiune.</li>
             <li>Preț final RON = „Preț cu TVA” din fișier × cursul EUR/RON introdus înainte de import.</li>
             <li>Se actualizează stocul, prețul final, greutatea, numele în engleză, denumirea în română și cantitatea de comandat.</li>
             <li>Celulele goale din „Nr. produse de comandat” și stocurile negative devin 0.</li>

@@ -10,6 +10,7 @@ use App\Models\ProdusFurnizor;
 use App\Models\Receptie;
 use App\Models\ReceptieLinie;
 use App\Services\NecesarAprovizionareService;
+use App\Services\ProductRegisterSynchronizer;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Builder;
@@ -74,8 +75,12 @@ class ReceptieController extends Controller
         return view('receptii.create', compact('factura', 'avertismenteStoc'));
     }
 
-    public function store(Request $request, FacturaFurnizor $factura, NecesarAprovizionareService $necesarAprovizionare): RedirectResponse
-    {
+    public function store(
+        Request $request,
+        FacturaFurnizor $factura,
+        NecesarAprovizionareService $necesarAprovizionare,
+        ProductRegisterSynchronizer $register,
+    ): RedirectResponse {
         $date = $request->validate([
             'data_receptie' => ['required', 'date'],
             'confirmare_saga' => ['accepted'],
@@ -83,7 +88,7 @@ class ReceptieController extends Controller
             'confirmare_saga.accepted' => 'Confirmarea manuală a importului în SAGA este obligatorie.',
         ]);
 
-        DB::transaction(function () use ($date, $factura, $necesarAprovizionare): void {
+        DB::transaction(function () use ($date, $factura, $necesarAprovizionare, $register): void {
             $facturaBlocata = FacturaFurnizor::query()
                 ->lockForUpdate()
                 ->findOrFail($factura->id);
@@ -183,10 +188,11 @@ class ReceptieController extends Controller
                 }
             }
 
-            Produs::query()
+            $products = Produs::query()
                 ->whereIn('id', $liniiProduse->pluck('produs_id')->unique())
-                ->get()
-                ->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
+                ->get();
+            $products->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
+            $register->sync($products->map(fn (Produs $produs) => $produs->refresh()), $gestiune);
         });
 
         return redirect()->route('facturi-furnizori.show', $factura)

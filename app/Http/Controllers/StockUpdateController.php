@@ -10,6 +10,7 @@ use App\Models\Produs;
 use App\Models\UnitateMasura;
 use App\Services\CodFgoAllocator;
 use App\Services\NecesarAprovizionareService;
+use App\Services\StockRegisterExchangeRate;
 use App\Services\StockRegisterXlsxParser;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -21,8 +22,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -32,15 +33,18 @@ class StockUpdateController extends Controller
 
     private const MAX_MANUAL_PRODUCTS = 10;
 
-    public function index(): View
+    public function index(StockRegisterExchangeRate $exchangeRate): View
     {
         return view('stock-update.index', [
-            'defaultExchangeRate' => (string) config('stock-register.default_exchange_rate', '5.31'),
+            'defaultExchangeRate' => $exchangeRate->current(),
         ]);
     }
 
-    public function prepare(Request $request, StockRegisterXlsxParser $parser): RedirectResponse
-    {
+    public function prepare(
+        Request $request,
+        StockRegisterXlsxParser $parser,
+        StockRegisterExchangeRate $exchangeRateState,
+    ): RedirectResponse {
         $exchangeRate = $this->validatedExchangeRate($request);
         $this->clearDraft($request);
         $sourcePath = (string) config('stock-register.path');
@@ -50,11 +54,14 @@ class StockUpdateController extends Controller
             ]);
         }
 
-        return $this->preparePreview($request, $parser, $sourcePath, basename($sourcePath), $exchangeRate);
+        return $this->preparePreview($request, $parser, $exchangeRateState, $sourcePath, basename($sourcePath), $exchangeRate);
     }
 
-    public function upload(Request $request, StockRegisterXlsxParser $parser): RedirectResponse
-    {
+    public function upload(
+        Request $request,
+        StockRegisterXlsxParser $parser,
+        StockRegisterExchangeRate $exchangeRateState,
+    ): RedirectResponse {
         $request->validate([
             'registru' => ['required', 'file', 'extensions:xlsx', 'max:20480'],
         ]);
@@ -71,6 +78,7 @@ class StockUpdateController extends Controller
         return $this->preparePreview(
             $request,
             $parser,
+            $exchangeRateState,
             Storage::disk('local')->path($temporaryPath),
             $file->getClientOriginalName(),
             $exchangeRate,
@@ -81,6 +89,7 @@ class StockUpdateController extends Controller
     private function preparePreview(
         Request $request,
         StockRegisterXlsxParser $parser,
+        StockRegisterExchangeRate $exchangeRateState,
         string $sourcePath,
         string $originalName,
         string $exchangeRate,
@@ -112,6 +121,16 @@ class StockUpdateController extends Controller
             }
 
             return back()->withInput()->withErrors(['registru' => 'Niciun cod din registru nu există în catalogul local.']);
+        }
+
+        try {
+            $exchangeRateState->remember($exchangeRate);
+        } catch (Throwable $exception) {
+            if ($temporaryPath !== null) {
+                Storage::disk('local')->delete($temporaryPath);
+            }
+
+            return back()->withInput()->withErrors(['registru' => $exception->getMessage()]);
         }
 
         $request->session()->put(self::SESSION_KEY, [

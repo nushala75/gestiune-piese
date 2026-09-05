@@ -16,6 +16,7 @@ class StockUpdateImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['stock-register.sync_enabled' => false]);
         Schema::create('firme', function (Blueprint $table): void {
             $table->id();
             $table->string('cod_fiscal');
@@ -156,6 +157,8 @@ class StockUpdateImportTest extends TestCase
         });
         $this->post('/stoc/actualizare/pregatire', ['exchange_rate' => '5,31'])
             ->assertRedirect('/stoc/actualizare/previzualizare');
+        Storage::disk('local')->assertExists('stock-register/exchange-rate.txt');
+        $this->assertSame('5.31', trim(Storage::disk('local')->get('stock-register/exchange-rate.txt')));
         $token = session('stock_update_import_preview.token');
 
         $this->get('/stoc/actualizare/previzualizare')
@@ -180,6 +183,7 @@ class StockUpdateImportTest extends TestCase
             'stoc_minim' => 1,
             'activ' => 1,
         ])->assertRedirect('/stoc/actualizare/previzualizare');
+        $this->assertSame(2, session('stock_update_import_preview.preview.summary.price_changed'));
 
         $this->post('/stoc/actualizare/aplicare', [
             'token' => $token,
