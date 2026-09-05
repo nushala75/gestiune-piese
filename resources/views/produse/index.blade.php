@@ -72,7 +72,7 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Cod FGO</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>De comandat</th><th>Furnizor comandă</th><th>Intrare EUR</th><th>Vânzare cu TVA</th><th>Acțiuni</th>
+                        <th>Cod FGO</th><th>Cod produs</th><th>Produs</th><th>Categorie</th><th>Stoc</th><th>De comandat</th><th>Furnizor comandă</th><th>Intrare EUR</th><th>Vânzare cu TVA</th><th>Acțiuni</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -98,6 +98,7 @@
                                 </form>
                                 <code>{{ $produs->cod_fgo }}</code>
                             </td>
+                            <td><code>{{ $produs->cod_produs }}</code></td>
                             <td class="name product-summary">
                                 <strong>{{ $produs->denumire_engleza }}</strong>
                             </td>

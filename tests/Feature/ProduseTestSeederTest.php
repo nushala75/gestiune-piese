@@ -145,6 +145,8 @@ class ProduseTestSeederTest extends TestCase
         $this->get('/produse')
             ->assertOk()
             ->assertSee('00445402')
+            ->assertSee('<th>Cod FGO</th><th>Cod produs</th><th>Produs</th>', false)
+            ->assertSee('<code>11102-1G87-004</code>', false)
             ->assertSee('<strong>RUB BUSH ENG HANGER</strong>', false)
             ->assertDontSee('<strong>11102-1G87-004 RUB BUSH ENG HANGER</strong>', false)
             ->assertSee('2.0633')
