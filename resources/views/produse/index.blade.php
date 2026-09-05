@@ -99,8 +99,7 @@
                                 <code>{{ $produs->cod_fgo }}</code>
                             </td>
                             <td class="name product-summary">
-                                <strong>{{ $produs->cod_produs }} {{ $produs->denumire_engleza }}</strong>
-                                <small>{{ $produs->descriere_romana ?: 'Fără descriere în română' }}</small>
+                                <strong>{{ $produs->denumire_engleza }}</strong>
                             </td>
                             <td><span class="pill">{{ $produs->categorie->denumire }}</span></td>
                             <td>
