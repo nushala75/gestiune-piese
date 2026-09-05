@@ -149,6 +149,7 @@ class ProduseTestSeederTest extends TestCase
             ->assertSee('<code>11102-1G87-004</code>', false)
             ->assertSee('<strong>RUB BUSH ENG HANGER</strong>', false)
             ->assertDontSee('<strong>11102-1G87-004 RUB BUSH ENG HANGER</strong>', false)
+            ->assertSee('.pagination svg { display:inline-block; width:18px; height:18px; vertical-align:middle; }', false)
             ->assertSee('2.0633')
             ->assertSee('name="stoc"', false)
             ->assertSee('name="pret_vanzare_cu_tva"', false)

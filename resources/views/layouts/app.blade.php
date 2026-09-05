@@ -117,8 +117,8 @@
         .price-confirm-inline small { font-size:10px; }
         .confirm-bar { padding:16px 18px; border-top:1px solid var(--line); display:flex; flex-wrap:wrap; align-items:end; justify-content:space-between; gap:14px; }
         .confirm-bar label { display:grid; gap:5px; color:#41566a; font-weight:700; }
-        nav.pagination { padding:16px 20px; border-top:1px solid var(--line); }
-        nav.pagination svg { width:18px; }
+        .pagination { padding:16px 20px; border-top:1px solid var(--line); }
+        .pagination svg { display:inline-block; width:18px; height:18px; vertical-align:middle; }
         @media (max-width:900px) { .shell{grid-template-columns:1fr}.sidebar{padding:16px}.menu{grid-template-columns:repeat(2,1fr)}.topbar{padding:0 18px}.content{padding:22px 18px}.cards{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.page-head{align-items:stretch;flex-direction:column}.search{width:100%}input[type=search]{min-width:0;flex:1}.company{display:none}.form-grid{grid-template-columns:1fr} }
     </style>
 </head>
