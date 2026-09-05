@@ -51,7 +51,7 @@ Fișierul sursă verificat este `database/data/baza_produse_imbunatatita.csv`. C
 
 - `/` — panou principal;
 - `/produse` — catalog, căutare, prețuri și stoc.
-- `/stoc/actualizare` — folosește `registru-produse-kymco.xlsx` din rădăcina aplicației sau un fișier ales manual; după previzualizare actualizează după referință stocul, prețul final în lei, greutatea, denumirile EN/RO și cantitatea de comandat, cu un curs EUR/RON editabil implicit `5.31`;
+- `/stoc/actualizare` — folosește `registru-produse-kymco.xlsx` din rădăcina aplicației sau un fișier ales manual; după previzualizare actualizează după referință stocul, prețul final în lei, greutatea, denumirile EN/RO și cantitatea de comandat, cu un curs EUR/RON editabil implicit `5.31`; codurile ambigue sunt enumerate, iar maximum 10 produse lipsă pot fi create manual în fiecare sesiune de import;
 - `/furnizori` — administrarea furnizorilor, adreselor și stării activ/inactiv;
 - `/facturi-furnizori` — import, mapare și recepție facturi furnizori.
 

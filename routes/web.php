@@ -34,6 +34,8 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/stoc/actualizare/pregatire', [StockUpdateController::class, 'prepare'])->name('stock-update.prepare');
     Route::post('/stoc/actualizare/incarcare', [StockUpdateController::class, 'upload'])->name('stock-update.upload');
     Route::get('/stoc/actualizare/previzualizare', [StockUpdateController::class, 'preview'])->name('stock-update.preview');
+    Route::get('/stoc/actualizare/produs-nou/{row}', [StockUpdateController::class, 'newProduct'])->whereNumber('row')->name('stock-update.product.create');
+    Route::post('/stoc/actualizare/produs-nou/{row}', [StockUpdateController::class, 'storeNewProduct'])->whereNumber('row')->name('stock-update.product.store');
     Route::post('/stoc/actualizare/aplicare', [StockUpdateController::class, 'apply'])->name('stock-update.apply');
     Route::post('/stoc/actualizare/anulare', [StockUpdateController::class, 'cancel'])->name('stock-update.cancel');
     Route::get('/furnizori', [FurnizorController::class, 'index'])->name('furnizori.index');

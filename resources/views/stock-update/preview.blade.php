@@ -5,6 +5,10 @@
 
 @section('content')
     @php($summary = $draft['preview']['summary'])
+    @php($createdCount = count($draft['created_products'] ?? []))
+    @if(session('status'))
+        <div class="success">{{ session('status') }}</div>
+    @endif
     @if($errors->any())
         <div class="notice">
             <strong>Actualizarea nu a fost aplicată.</strong>
@@ -38,7 +42,14 @@
     </div>
 
     @if($summary['ambiguous'] > 0)
-        <div class="notice"><strong>Aplicarea este blocată:</strong> {{ $summary['ambiguous'] }} coduri corespund mai multor produse din catalog.</div>
+        <div class="notice">
+            <strong>Aplicarea este blocată:</strong> {{ $summary['ambiguous'] }} coduri corespund mai multor produse din catalog:
+            <ul>
+                @foreach($draft['preview']['ambiguous'] as $line)
+                    <li><code>{{ $line['code'] }}</code> — {{ $line['matches'] }} produse</li>
+                @endforeach
+            </ul>
+        </div>
     @endif
 
     <section class="panel">
@@ -69,16 +80,30 @@
 
     @if($summary['missing'] > 0 || $summary['ambiguous'] > 0)
         <section class="panel" style="margin-top:18px">
-            <div class="panel-head"><h2>Poziții neaplicabile</h2></div>
+            <div class="panel-head">
+                <h2>Poziții neaplicabile</h2>
+                @if($summary['missing'] > 0)<span class="pill">create manual: {{ $createdCount }}/10</span>@endif
+            </div>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Rând</th><th>Cod</th><th>Motiv</th></tr></thead>
+                    <thead><tr><th>Rând</th><th>Cod</th><th>Motiv</th><th>Acțiune</th></tr></thead>
                     <tbody>
                     @foreach(array_slice($draft['preview']['missing'], 0, 100) as $line)
-                        <tr><td>{{ $line['row'] }}</td><td><code>{{ $line['code'] }}</code></td><td>Codul nu există în catalogul local</td></tr>
+                        <tr>
+                            <td>{{ $line['row'] }}</td>
+                            <td><code>{{ $line['code'] }}</code></td>
+                            <td>Codul nu există în catalogul local</td>
+                            <td>
+                                @if($createdCount < 10)
+                                    <a class="button-secondary" href="{{ route('stock-update.product.create', ['row' => $line['row']]) }}">Creează manual</a>
+                                @else
+                                    <span class="danger">Limita sesiunii a fost atinsă</span>
+                                @endif
+                            </td>
+                        </tr>
                     @endforeach
                     @foreach(array_slice($draft['preview']['ambiguous'], 0, 100) as $line)
-                        <tr><td>{{ $line['row'] }}</td><td><code>{{ $line['code'] }}</code></td><td>{{ $line['matches'] }} produse au același cod; aplicarea este blocată</td></tr>
+                        <tr><td>{{ $line['row'] }}</td><td><code>{{ $line['code'] }}</code></td><td>{{ $line['matches'] }} produse au același cod; aplicarea este blocată</td><td>Corectează manual produsele existente</td></tr>
                     @endforeach
                     </tbody>
                 </table>

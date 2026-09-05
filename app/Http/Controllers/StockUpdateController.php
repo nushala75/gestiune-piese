@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Categorie;
 use App\Models\Gestiune;
 use App\Models\JurnalAudit;
 use App\Models\MiscareStoc;
 use App\Models\Produs;
+use App\Models\UnitateMasura;
+use App\Services\CodFgoAllocator;
 use App\Services\NecesarAprovizionareService;
 use App\Services\StockRegisterXlsxParser;
 use Brick\Math\BigDecimal;
@@ -19,12 +22,15 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 use RuntimeException;
 use Throwable;
 
 class StockUpdateController extends Controller
 {
     private const SESSION_KEY = 'stock_update_import_preview';
+
+    private const MAX_MANUAL_PRODUCTS = 10;
 
     public function index(): View
     {
@@ -100,7 +106,7 @@ class StockUpdateController extends Controller
             return back()->withInput()->withErrors(['registru' => $exception->getMessage()]);
         }
 
-        if ($preview['summary']['matched'] === 0) {
+        if ($preview['summary']['matched'] === 0 && $preview['summary']['ambiguous'] === 0) {
             if ($temporaryPath !== null) {
                 Storage::disk('local')->delete($temporaryPath);
             }
@@ -117,6 +123,7 @@ class StockUpdateController extends Controller
             'sheet' => $parsed['sheet'],
             'exchange_rate' => $exchangeRate,
             'preview' => $preview,
+            'created_products' => [],
         ]);
 
         return redirect()->route('stock-update.preview');
@@ -131,6 +138,141 @@ class StockUpdateController extends Controller
         }
 
         return view('stock-update.preview', compact('draft'));
+    }
+
+    public function newProduct(Request $request, int $row): View|RedirectResponse
+    {
+        $draft = $request->session()->get(self::SESSION_KEY);
+        if (! is_array($draft)) {
+            return redirect()->route('stock-update.index')
+                ->withErrors(['registru' => 'Previzualizarea a expirat. Încarcă din nou registrul.']);
+        }
+        if (count($draft['created_products'] ?? []) >= self::MAX_MANUAL_PRODUCTS) {
+            return redirect()->route('stock-update.preview')
+                ->withErrors(['registru' => 'Ai atins limita de 10 produse create în această sesiune de import.']);
+        }
+
+        $line = collect($draft['preview']['missing'] ?? [])->firstWhere('row', $row);
+        if (! is_array($line)) {
+            return redirect()->route('stock-update.preview')
+                ->withErrors(['registru' => 'Poziția nu mai este disponibilă pentru creare.']);
+        }
+
+        $categorii = Categorie::query()->where('activa', true)->orderBy('denumire')->get();
+        $unitatiMasura = UnitateMasura::query()->where('activa', true)->orderBy('cod')->get();
+        $categorieImplicita = $categorii->firstWhere('denumire', 'Pe comanda');
+        $unitateImplicita = $unitatiMasura->firstWhere('cod', 'BUC');
+        if ($categorii->isEmpty() || $unitatiMasura->isEmpty()) {
+            return redirect()->route('stock-update.preview')->withErrors([
+                'registru' => 'Produsul nu poate fi creat: nu există categorii sau unități de măsură active.',
+            ]);
+        }
+
+        $priceRon = BigDecimal::of($line['price_with_vat_eur'])
+            ->multipliedBy((string) $draft['exchange_rate'])
+            ->toScale(2, RoundingMode::HalfUp)
+            ->__toString();
+
+        return view('stock-update.create-product', compact(
+            'draft',
+            'line',
+            'categorii',
+            'unitatiMasura',
+            'categorieImplicita',
+            'unitateImplicita',
+            'priceRon',
+        ));
+    }
+
+    public function storeNewProduct(
+        Request $request,
+        int $row,
+        CodFgoAllocator $allocator,
+        StockRegisterXlsxParser $parser,
+    ): RedirectResponse {
+        $draft = $request->session()->get(self::SESSION_KEY);
+        if (! is_array($draft)
+            || ! hash_equals((string) ($draft['token'] ?? ''), (string) $request->input('token'))) {
+            return redirect()->route('stock-update.index')
+                ->withErrors(['registru' => 'Previzualizarea a expirat. Încarcă din nou registrul.']);
+        }
+        if (count($draft['created_products'] ?? []) >= self::MAX_MANUAL_PRODUCTS) {
+            return redirect()->route('stock-update.preview')
+                ->withErrors(['registru' => 'Ai atins limita de 10 produse create în această sesiune de import.']);
+        }
+
+        $line = collect($draft['preview']['missing'] ?? [])->firstWhere('row', $row);
+        if (! is_array($line)) {
+            return redirect()->route('stock-update.preview')
+                ->withErrors(['registru' => 'Poziția nu mai este disponibilă pentru creare.']);
+        }
+
+        $data = $request->validate([
+            'token' => ['required', 'uuid'],
+            'categorie_id' => ['required', Rule::exists('categorii', 'id')->where('activa', true)],
+            'unitate_masura_id' => ['required', Rule::exists('unitati_masura', 'id')->where('activa', true)],
+            'marca' => ['nullable', 'string', 'max:100'],
+            'stoc_minim' => ['required', 'integer', 'min:0'],
+            'activ' => ['required', 'boolean'],
+        ]);
+
+        if (Produs::query()->where('cod_produs', $line['code'])->exists()) {
+            return redirect()->route('stock-update.preview')
+                ->withErrors(['registru' => "Codul {$line['code']} există deja. Reîncarcă previzualizarea."]);
+        }
+
+        $warehouse = $this->companyWarehouse();
+        $priceRon = BigDecimal::of($line['price_with_vat_eur'])
+            ->multipliedBy((string) $draft['exchange_rate'])
+            ->toScale(2, RoundingMode::HalfUp)
+            ->__toString();
+        $priceNet = BigDecimal::of($priceRon)
+            ->dividedBy('1.21', 4, RoundingMode::HalfUp)
+            ->__toString();
+
+        $product = DB::transaction(function () use ($allocator, $data, $line, $priceNet, $priceRon, $warehouse): Produs {
+            $product = Produs::query()->create([
+                'cod_fgo' => $allocator->aloca(),
+                'cod_produs' => $line['code'],
+                'denumire_engleza' => $line['english_name'],
+                'descriere_romana' => $line['romanian_name'],
+                'categorie_id' => $data['categorie_id'],
+                'unitate_masura_id' => $data['unitate_masura_id'],
+                'marca' => filled($data['marca'] ?? null) ? mb_strtoupper(trim($data['marca'])) : 'KYMCO',
+                'stoc_minim' => $data['stoc_minim'],
+                'cantitate_de_comandat' => $line['reorder_quantity'],
+                'furnizor_comanda_id' => null,
+                'furnizor_comanda_manual' => false,
+                'pret_vanzare_fara_tva' => $priceNet,
+                'pret_vanzare_cu_tva' => $priceRon,
+                'cota_tva' => '21.00',
+                'greutate_kg' => $line['weight_kg'],
+                'voluminos' => false,
+                'activ' => $data['activ'],
+                'sursa' => 'registru_xlsx',
+            ]);
+
+            DB::table('solduri_stoc')->insert([
+                'gestiune_id' => $warehouse->id,
+                'produs_id' => $product->id,
+                'cantitate_fizica' => $line['stock'],
+                'cantitate_rezervata' => 0,
+                'updated_at' => now(),
+            ]);
+
+            return $product;
+        });
+
+        $sourcePath = (string) $draft['source_path'];
+        $parsed = $parser->parse($sourcePath);
+        $draft['created_products'][] = ['id' => $product->id, 'code' => $product->cod_produs];
+        $draft['preview'] = $this->buildPreview($parsed['rows'], $warehouse, (string) $draft['exchange_rate']);
+        $request->session()->put(self::SESSION_KEY, $draft);
+
+        return redirect()->route('stock-update.preview')->with(
+            'status',
+            "Produsul {$product->cod_produs} a fost creat. Mai poți crea ".(self::MAX_MANUAL_PRODUCTS - count($draft['created_products'])).' produse în această sesiune.',
+        );
     }
 
     public function apply(Request $request, StockRegisterXlsxParser $parser, NecesarAprovizionareService $reorder): RedirectResponse
