@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Services\NecesarAprovizionareService;
-use App\Services\ProductRegisterSynchronizer;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Builder;
@@ -20,9 +19,7 @@ class ProdusDetaliiUpdateController extends Controller
         Request $request,
         Produs $produs,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
-        $oldCode = $produs->cod_produs;
         $mapareFurnizor = $produs->furnizori()
             ->orderByDesc('data_ultimei_achizitii')
             ->orderByDesc('id')
@@ -76,7 +73,7 @@ class ProdusDetaliiUpdateController extends Controller
             ->dividedBy('1.21', 4, RoundingMode::HalfUp)
             ->__toString();
 
-        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $oldCode, $pretFaraTva, $produs, $register): void {
+        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $pretFaraTva, $produs): void {
             $produs->update([
                 'cod_fgo' => trim($date['cod_fgo']),
                 'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
@@ -113,7 +110,6 @@ class ProdusDetaliiUpdateController extends Controller
             );
 
             $necesarAprovizionare->sincronizeaza($produs, $gestiune);
-            $register->sync([$produs->refresh()], $gestiune, [$produs->id => $oldCode]);
         });
 
         return redirect()

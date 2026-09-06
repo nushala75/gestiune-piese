@@ -10,7 +10,6 @@ use App\Models\ProdusFurnizor;
 use App\Models\Receptie;
 use App\Models\ReceptieLinie;
 use App\Services\NecesarAprovizionareService;
-use App\Services\ProductRegisterSynchronizer;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Builder;
@@ -79,7 +78,6 @@ class ReceptieController extends Controller
         Request $request,
         FacturaFurnizor $factura,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
         $date = $request->validate([
             'data_receptie' => ['required', 'date'],
@@ -88,7 +86,7 @@ class ReceptieController extends Controller
             'confirmare_saga.accepted' => 'Confirmarea manuală a importului în SAGA este obligatorie.',
         ]);
 
-        DB::transaction(function () use ($date, $factura, $necesarAprovizionare, $register): void {
+        DB::transaction(function () use ($date, $factura, $necesarAprovizionare): void {
             $facturaBlocata = FacturaFurnizor::query()
                 ->lockForUpdate()
                 ->findOrFail($factura->id);
@@ -188,11 +186,10 @@ class ReceptieController extends Controller
                 }
             }
 
-            $products = Produs::query()
+            Produs::query()
                 ->whereIn('id', $liniiProduse->pluck('produs_id')->unique())
-                ->get();
-            $products->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
-            $register->sync($products->map(fn (Produs $produs) => $produs->refresh()), $gestiune);
+                ->get()
+                ->each(fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune));
         });
 
         return redirect()->route('facturi-furnizori.show', $factura)

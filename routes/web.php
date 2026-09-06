@@ -9,6 +9,7 @@ use App\Http\Controllers\ProdusDetaliiUpdateController;
 use App\Http\Controllers\ReceptieController;
 use App\Http\Controllers\SagaExportController;
 use App\Http\Controllers\StocCsvImportController;
+use App\Http\Controllers\StockRegisterLocalUpdateController;
 use App\Http\Controllers\StockUpdateController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +34,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/stoc/actualizare', [StockUpdateController::class, 'index'])->name('stock-update.index');
     Route::post('/stoc/actualizare/pregatire', [StockUpdateController::class, 'prepare'])->name('stock-update.prepare');
     Route::post('/stoc/actualizare/incarcare', [StockUpdateController::class, 'upload'])->name('stock-update.upload');
+    Route::post('/stoc/actualizare/din-aplicatie', StockRegisterLocalUpdateController::class)->name('stock-update.local-file');
     Route::get('/stoc/actualizare/previzualizare', [StockUpdateController::class, 'preview'])->name('stock-update.preview');
     Route::get('/stoc/actualizare/produs-nou/{row}', [StockUpdateController::class, 'newProduct'])->whereNumber('row')->name('stock-update.product.create');
     Route::post('/stoc/actualizare/produs-nou/{row}', [StockUpdateController::class, 'storeNewProduct'])->whereNumber('row')->name('stock-update.product.store');

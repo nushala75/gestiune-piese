@@ -8,7 +8,6 @@ use App\Models\Produs;
 use App\Models\UnitateMasura;
 use App\Services\CodFgoAllocator;
 use App\Services\NecesarAprovizionareService;
-use App\Services\ProductRegisterSynchronizer;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Contracts\View\View;
@@ -34,7 +33,6 @@ class ProdusController extends Controller
         Request $request,
         CodFgoAllocator $codFgoAllocator,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
         $date = $request->validate([
             'cod_produs' => ['required', 'string', 'max:64'],
@@ -62,7 +60,7 @@ class ProdusController extends Controller
             ? null
             : BigDecimal::of($pretCuTva)->dividedBy('1.21', 4, RoundingMode::HalfUp)->__toString();
 
-        $produs = DB::transaction(function () use ($codFgoAllocator, $date, $gestiune, $necesarAprovizionare, $pretCuTva, $pretFaraTva, $register): Produs {
+        $produs = DB::transaction(function () use ($codFgoAllocator, $date, $gestiune, $necesarAprovizionare, $pretCuTva, $pretFaraTva): Produs {
             $produs = Produs::query()->create([
                 'cod_fgo' => $codFgoAllocator->aloca(),
                 'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
@@ -91,7 +89,6 @@ class ProdusController extends Controller
                 'updated_at' => now(),
             ]);
             $necesarAprovizionare->sincronizeaza($produs, $gestiune);
-            $register->sync([$produs->refresh()], $gestiune);
 
             return $produs;
         });
@@ -155,7 +152,6 @@ class ProdusController extends Controller
         Request $request,
         Produs $produs,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
         $date = $request->validate([
             'stoc' => ['required', 'integer', 'min:0'],
@@ -177,7 +173,7 @@ class ProdusController extends Controller
             ->dividedBy('1.21', 4, RoundingMode::HalfUp)
             ->__toString();
 
-        DB::transaction(function () use ($date, $gestiune, $necesarAprovizionare, $pretFaraTva, $produs, $register): void {
+        DB::transaction(function () use ($date, $gestiune, $necesarAprovizionare, $pretFaraTva, $produs): void {
             $actualizariProdus = [
                 'pret_vanzare_cu_tva' => $date['pret_vanzare_cu_tva'],
                 'pret_vanzare_fara_tva' => $pretFaraTva,
@@ -200,7 +196,6 @@ class ProdusController extends Controller
             );
 
             $necesarAprovizionare->sincronizeaza($produs, $gestiune);
-            $register->sync([$produs->refresh()], $gestiune);
         });
 
         return back()->with('status', "Produsul {$produs->cod_produs} a fost actualizat.");
@@ -227,9 +222,7 @@ class ProdusController extends Controller
         Request $request,
         Produs $produs,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
-        $oldCode = $produs->cod_produs;
         $mapareFurnizor = $produs->furnizori()
             ->orderByDesc('data_ultimei_achizitii')
             ->orderByDesc('id')
@@ -280,7 +273,7 @@ class ProdusController extends Controller
             ->dividedBy('1.21', 4, RoundingMode::HalfUp)
             ->__toString();
 
-        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $oldCode, $pretFaraTva, $produs, $register): void {
+        DB::transaction(function () use ($date, $gestiune, $mapareFurnizor, $necesarAprovizionare, $pretFaraTva, $produs): void {
             $produs->update([
                 'cod_fgo' => trim($date['cod_fgo']),
                 'cod_produs' => mb_strtoupper(trim($date['cod_produs'])),
@@ -316,7 +309,6 @@ class ProdusController extends Controller
             );
 
             $necesarAprovizionare->sincronizeaza($produs, $gestiune);
-            $register->sync([$produs->refresh()], $gestiune, [$produs->id => $oldCode]);
         });
 
         return redirect()

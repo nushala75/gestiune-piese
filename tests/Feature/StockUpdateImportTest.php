@@ -16,7 +16,6 @@ class StockUpdateImportTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['stock-register.sync_enabled' => false]);
         Schema::create('firme', function (Blueprint $table): void {
             $table->id();
             $table->string('cod_fiscal');
@@ -140,6 +139,79 @@ class StockUpdateImportTest extends TestCase
             Schema::dropIfExists($table);
         }
         parent::tearDown();
+    }
+
+    public function test_application_data_can_update_a_locally_selected_register(): void
+    {
+        Storage::fake('local');
+        $productId = DB::table('produse')->insertGetId([
+            'cod_produs' => '23100-KEB7-900',
+            'denumire_engleza' => 'DRIVE BELT UPDATED',
+            'descriere_romana' => 'Curea variator actualizată',
+            'cantitate_de_comandat' => 3,
+            'pret_vanzare_fara_tva' => '53.1000',
+            'pret_vanzare_cu_tva' => '64.25',
+            'cota_tva' => '21.00',
+            'greutate_kg' => '0.250',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $warehouseId = DB::table('gestiuni')->where('cod', 'FIRMA')->value('id');
+        DB::table('solduri_stoc')->insert([
+            'gestiune_id' => $warehouseId,
+            'produs_id' => $productId,
+            'cantitate_fizica' => 10,
+            'cantitate_rezervata' => 0,
+        ]);
+
+        $response = $this->post('/stoc/actualizare/din-aplicatie', [
+            'exchange_rate' => '5,31',
+            'registru' => UploadedFile::fake()->createWithContent(
+                'registru-produse-kymco.xlsx',
+                file_get_contents(base_path('registru-produse-kymco.xlsx')),
+            ),
+        ], ['Accept' => 'application/json']);
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            ->assertHeader('X-Kymco-Updated-Products', '1');
+        $updatedPath = $response->baseResponse->getFile()->getPathname();
+        $row = collect(app(StockRegisterXlsxParser::class)->parse($updatedPath)['rows'])
+            ->firstWhere('code', '23100-KEB7-900');
+
+        $this->assertSame(10, $row['stock']);
+        $this->assertSame('DRIVE BELT UPDATED', $row['english_name']);
+        $this->assertSame(3, $row['reorder_quantity']);
+        $this->assertSame('0.250', $row['weight_kg']);
+        $this->assertSame('12.1', $row['price_with_vat_eur']);
+        $this->assertSame('Curea variator actualizată', $row['romanian_name']);
+    }
+
+    public function test_stock_update_page_contains_the_local_register_button(): void
+    {
+        $this->get('/stoc/actualizare')
+            ->assertOk()
+            ->assertSee('Actualizare din aplicație în local')
+            ->assertSee('showOpenFilePicker', false);
+    }
+
+    public function test_local_register_update_lists_duplicate_application_codes_and_is_blocked(): void
+    {
+        DB::table('produse')->insert([
+            'cod_produs' => 'ABC-1',
+            'denumire_engleza' => 'Produs duplicat',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/stoc/actualizare/din-aplicatie', [
+            'exchange_rate' => '5.31',
+            'registru' => UploadedFile::fake()->createWithContent('registru.xlsx', 'test'),
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['registru'])
+            ->assertJsonFragment([
+                'registru' => ['Actualizarea este blocată: următoarele coduri corespund mai multor produse din aplicație: ABC-1.'],
+            ]);
     }
 
     public function test_preview_and_confirmed_apply_update_all_confirmed_fields(): void

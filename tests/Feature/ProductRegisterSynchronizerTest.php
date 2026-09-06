@@ -24,7 +24,6 @@ class ProductRegisterSynchronizerTest extends TestCase
     {
         parent::setUp();
         Storage::fake('local');
-        config(['stock-register.sync_enabled' => true]);
 
         Schema::create('firme', function (Blueprint $table): void {
             $table->id();
@@ -75,13 +74,11 @@ class ProductRegisterSynchronizerTest extends TestCase
 
         $this->workbookPath = sys_get_temp_dir().'/kymco-register-sync-'.bin2hex(random_bytes(6)).'.xlsx';
         copy(base_path('registru-produse-kymco.xlsx'), $this->workbookPath);
-        config(['stock-register.path' => $this->workbookPath]);
         app(StockRegisterExchangeRate::class)->remember('5.31');
     }
 
     protected function tearDown(): void
     {
-        config(['stock-register.sync_enabled' => false]);
         @unlink($this->workbookPath);
         foreach (['solduri_stoc', 'produse', 'gestiuni', 'firme'] as $table) {
             Schema::dropIfExists($table);
@@ -99,7 +96,7 @@ class ProductRegisterSynchronizerTest extends TestCase
             'cantitate_rezervata' => 0,
         ]);
 
-        app(ProductRegisterSynchronizer::class)->sync([$product], $this->warehouse);
+        app(ProductRegisterSynchronizer::class)->updateFile($this->workbookPath, [$product], $this->warehouse);
 
         $row = collect(app(StockRegisterXlsxParser::class)->parse($this->workbookPath)['rows'])
             ->firstWhere('code', '106B-KPS0-003');
@@ -131,12 +128,12 @@ class ProductRegisterSynchronizerTest extends TestCase
         try {
             DB::transaction(function () use ($product): void {
                 $product->update(['denumire_engleza' => 'NESALVAT']);
-                app(ProductRegisterSynchronizer::class)->sync([$product->refresh()], $this->warehouse);
+                app(ProductRegisterSynchronizer::class)->updateFile($this->workbookPath, [$product->refresh()], $this->warehouse);
             });
             $this->fail('Sincronizarea trebuia blocată.');
         } catch (ValidationException $exception) {
             $this->assertStringContainsString('deschis sau blocat', $exception->errors()['registru_excel'][0]);
-            $this->assertStringContainsString('Modificări nesalvate', $exception->errors()['registru_excel'][0]);
+            $this->assertStringContainsString('Produse neactualizate', $exception->errors()['registru_excel'][0]);
             $this->assertStringContainsString('EN „NESALVAT”', $exception->errors()['registru_excel'][0]);
         } finally {
             flock($handle, LOCK_UN);
@@ -151,7 +148,7 @@ class ProductRegisterSynchronizerTest extends TestCase
         $product = $this->product('NOT-IN-REGISTER');
         $before = hash_file('sha256', $this->workbookPath);
 
-        app(ProductRegisterSynchronizer::class)->sync([$product], $this->warehouse);
+        app(ProductRegisterSynchronizer::class)->updateFile($this->workbookPath, [$product], $this->warehouse);
 
         $this->assertSame($before, hash_file('sha256', $this->workbookPath));
     }
@@ -162,7 +159,7 @@ class ProductRegisterSynchronizerTest extends TestCase
         $product = $this->product('106B-KPS0-003');
         $product->update(['pret_vanzare_fara_tva' => '55.0000']);
 
-        app(ProductRegisterSynchronizer::class)->sync([$product->refresh()], $this->warehouse);
+        app(ProductRegisterSynchronizer::class)->updateFile($this->workbookPath, [$product->refresh()], $this->warehouse);
 
         $this->assertSame('5.5', app(StockRegisterExchangeRate::class)->current());
         $this->assertMatchesRegularExpression('/<c r="J2"[^>]*><v>10<\/v><\/c>/', $this->worksheetXml());

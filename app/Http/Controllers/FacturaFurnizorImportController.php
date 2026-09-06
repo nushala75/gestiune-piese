@@ -13,7 +13,6 @@ use App\Models\UnitateMasura;
 use App\Services\CodFgoAllocator;
 use App\Services\MotoTrendInvoiceParser;
 use App\Services\NecesarAprovizionareService;
-use App\Services\ProductRegisterSynchronizer;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
 use Illuminate\Contracts\View\View;
@@ -24,7 +23,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
 
@@ -234,7 +232,6 @@ class FacturaFurnizorImportController extends Controller
         int $line,
         CodFgoAllocator $allocator,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
         $draft = $request->session()->get(self::SESSION_KEY);
         if (! is_array($draft)
@@ -280,7 +277,7 @@ class FacturaFurnizorImportController extends Controller
             ->__toString();
 
         try {
-            $product = DB::transaction(function () use ($allocator, $data, $draft, $invoiceLine, $necesarAprovizionare, $pretFaraTva, $register): Produs {
+            $product = DB::transaction(function () use ($allocator, $data, $draft, $invoiceLine, $necesarAprovizionare, $pretFaraTva): Produs {
                 $supplier = Furnizor::query()->firstOrCreate(
                     ['cod_fiscal' => $draft['invoice']['supplier_vat']],
                     [
@@ -325,12 +322,9 @@ class FacturaFurnizorImportController extends Controller
                 ]);
 
                 $necesarAprovizionare->sincronizeaza($product);
-                $register->sync([$product->refresh()]);
 
                 return $product;
             });
-        } catch (ValidationException $exception) {
-            throw $exception;
         } catch (Throwable $exception) {
             report($exception);
 
@@ -350,11 +344,8 @@ class FacturaFurnizorImportController extends Controller
             ->with('status', "Produsul {$product->cod_produs} a fost creat și mapat pe poziția ".($line + 1).'.');
     }
 
-    public function confirmPrice(
-        Request $request,
-        int $line,
-        ProductRegisterSynchronizer $register,
-    ): RedirectResponse {
+    public function confirmPrice(Request $request, int $line): RedirectResponse
+    {
         $draft = $request->session()->get(self::SESSION_KEY);
         if (! is_array($draft)
             || ! hash_equals((string) ($draft['token'] ?? ''), (string) $request->input('token'))
@@ -387,13 +378,10 @@ class FacturaFurnizorImportController extends Controller
                 ->withErrors(['lines' => 'Produsul mapat nu mai există.']);
         }
 
-        DB::transaction(function () use ($data, $pretFaraTva, $product, $register): void {
-            $product->update([
-                'pret_vanzare_cu_tva' => $data['pret_vanzare_cu_tva'],
-                'pret_vanzare_fara_tva' => $pretFaraTva,
-            ]);
-            $register->sync([$product->refresh()]);
-        });
+        $product->update([
+            'pret_vanzare_cu_tva' => $data['pret_vanzare_cu_tva'],
+            'pret_vanzare_fara_tva' => $pretFaraTva,
+        ]);
 
         $draft['invoice']['lines'][$line]['current_sale_price'] = $product->pret_vanzare_cu_tva;
         $draft['invoice']['lines'][$line]['proposed_sale_price'] = $product->pret_vanzare_cu_tva;
@@ -469,7 +457,6 @@ class FacturaFurnizorImportController extends Controller
         FacturaFurnizorLinie $linie,
         CodFgoAllocator $allocator,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): RedirectResponse {
         if ($factura->tip_document === 'storno') {
             return redirect()->route('facturi-furnizori.show', $factura)
@@ -512,7 +499,7 @@ class FacturaFurnizorImportController extends Controller
             ->__toString();
 
         try {
-            $product = DB::transaction(function () use ($allocator, $data, $factura, $linie, $necesarAprovizionare, $pretFaraTva, $register): Produs {
+            $product = DB::transaction(function () use ($allocator, $data, $factura, $linie, $necesarAprovizionare, $pretFaraTva): Produs {
                 $product = Produs::query()->create([
                     'cod_fgo' => $allocator->aloca(),
                     'cod_produs' => mb_strtoupper(trim($data['cod_produs'])),
@@ -547,15 +534,12 @@ class FacturaFurnizorImportController extends Controller
                 );
 
                 $necesarAprovizionare->sincronizeaza($product);
-                $register->sync([$product->refresh()]);
 
                 $linie->update(['produs_id' => $product->id, 'status_mapare' => 'mapat', 'observatii' => null]);
                 $factura->update(['status' => 'import_partial']);
 
                 return $product;
             });
-        } catch (ValidationException $exception) {
-            throw $exception;
         } catch (Throwable $exception) {
             report($exception);
 

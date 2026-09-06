@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Gestiune;
 use App\Models\Produs;
 use App\Services\NecesarAprovizionareService;
-use App\Services\ProductRegisterSynchronizer;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -18,7 +17,6 @@ class StocCsvImportController extends Controller
     public function store(
         Request $request,
         NecesarAprovizionareService $necesarAprovizionare,
-        ProductRegisterSynchronizer $register,
     ): View {
         $request->validate([
             'fisier_stoc' => ['required', 'file', 'max:10240'],
@@ -63,7 +61,6 @@ class StocCsvImportController extends Controller
             $coduriPrezenteCsv,
             $gestiune,
             $necesarAprovizionare,
-            $register,
             $produse,
             $produsePeCod,
             &$actualizate,
@@ -143,10 +140,6 @@ class StocCsvImportController extends Controller
 
             $produseAfectate->unique('id')->each(
                 fn (Produs $produs) => $necesarAprovizionare->sincronizeaza($produs, $gestiune),
-            );
-            $register->sync(
-                $produseAfectate->unique('id')->map(fn (Produs $produs) => $produs->refresh()),
-                $gestiune,
             );
         });
 

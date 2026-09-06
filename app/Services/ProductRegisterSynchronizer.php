@@ -29,15 +29,15 @@ class ProductRegisterSynchronizer
      * @param  iterable<int, Produs>  $products
      * @param  array<int, string>  $lookupCodesByProductId
      */
-    public function sync(iterable $products, ?Gestiune $warehouse = null, array $lookupCodesByProductId = []): void
-    {
-        if (! (bool) config('stock-register.sync_enabled', true)) {
-            return;
-        }
-
+    public function updateFile(
+        string $path,
+        iterable $products,
+        ?Gestiune $warehouse = null,
+        array $lookupCodesByProductId = [],
+    ): int {
         $products = collect($products)->unique('id')->values();
         if ($products->isEmpty()) {
-            return;
+            return 0;
         }
 
         $warehouse ??= Gestiune::query()
@@ -46,9 +46,8 @@ class ProductRegisterSynchronizer
             ->sole();
 
         $changes = $this->changes($products, $warehouse, $lookupCodesByProductId);
-        $path = (string) config('stock-register.path');
         if (! is_file($path)) {
-            $this->fail('Fișierul Excel prestabilit nu există: '.$path, $changes);
+            $this->fail('Fișierul Excel selectat nu există: '.$path, $changes);
         }
 
         $temporaryPath = dirname($path).DIRECTORY_SEPARATOR.'.'.basename($path).'.sync-'.bin2hex(random_bytes(6)).'.zip';
@@ -111,7 +110,7 @@ class ProductRegisterSynchronizer
             if ($matched === []) {
                 unset($archive);
 
-                return;
+                return 0;
             }
 
             $xml = $document->saveXML();
@@ -122,6 +121,8 @@ class ProductRegisterSynchronizer
             unset($archive);
 
             $this->overwriteLocked($path, $temporaryPath, $matched);
+
+            return count($matched);
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -439,7 +440,7 @@ class ProductRegisterSynchronizer
         $remaining = count($changes) > 10 ? ' și încă '.(count($changes) - 10).' produse' : '';
 
         throw ValidationException::withMessages([
-            'registru_excel' => $reason.' Modificări nesalvate: '.implode('; ', $visible).$remaining.'.',
+            'registru_excel' => $reason.' Produse neactualizate: '.implode('; ', $visible).$remaining.'.',
         ]);
     }
 }
